@@ -238,7 +238,7 @@ public class PdsPolicy {
     }
 
     @External()
-    public void remove_policy(String policy_id, String owner_did, byte[] owner_sign) {
+    public void remove_policy(String policy_id, @Optional String owner_did, @Optional byte[] owner_sign) {
         Context.require(!this.policyInfos.getOrDefault(policy_id, "").isEmpty(), "Invalid request target.");
 
         PolicyInfo policyInfo = PolicyInfo.fromString(this.policyInfos.get(policy_id));
