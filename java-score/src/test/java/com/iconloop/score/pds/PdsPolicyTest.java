@@ -11,7 +11,9 @@ import org.web3j.crypto.Hash;
 import org.web3j.crypto.Sign;
 
 import java.math.BigInteger;
+import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
@@ -112,5 +114,23 @@ public class PdsPolicyTest extends TestBase {
 
         pdsPolicyScore.invoke(owners[0], "remove_policy","TEST_POLICY_TO_REMOVE", owner_did, did_sign);
         verify(pdsPolicySpy).PDSEvent(EventType.RemovePolicy.name(), "TEST_POLICY_TO_REMOVE", owner_did);
+    }
+
+    @Test
+    void checkPolicy() {
+        pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_FOR_POLICY", "TEST_LABEL_A", owner_did, did_sign, owner_did, "", "");
+        pdsPolicyScore.invoke(owners[0], "add_policy","TEST_POLICY_A000", "TEST_LABEL_FOR_POLICY", "TEST_POLICY_A", owner_did, 3, 5, owner_did, did_sign, null, null);
+
+        var policy_checked = (Map<String, Object>) pdsPolicyScore.call("check_policy","TEST_POLICY_A000", owner_did, owner_did);
+        assertEquals(policy_checked.get("checked"), true);
+
+        var policy_checked_owner_only = (Map<String, Object>) pdsPolicyScore.call("check_policy","TEST_POLICY_A000", owner_did, null);
+        assertEquals(policy_checked_owner_only.get("checked"), true);
+
+        var policy_checked_consumer_only = (Map<String, Object>) pdsPolicyScore.call("check_policy","TEST_POLICY_A000", null, owner_did);
+        assertEquals(policy_checked_consumer_only.get("checked"), true);
+
+        var policy_checked_null = (Map<String, Object>) pdsPolicyScore.call("check_policy","TEST_POLICY_A000", null, null);
+        assertEquals(policy_checked_null.get("checked"), false);
     }
 }

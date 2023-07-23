@@ -311,8 +311,16 @@ public class PdsPolicy {
             }
         }
 
-        BigInteger labelExpireAt = new BigInteger(labelInfo.getString("expire_at"));
-        BigInteger policyExpireAt = new BigInteger(policyInfo.getString("expire_at"));
+        BigInteger labelExpireAt = BigInteger.ZERO;
+        if (!labelInfo.getString("expire_at").isEmpty()) {
+            labelExpireAt = new BigInteger(labelInfo.getString("expire_at"));
+        }
+
+        BigInteger policyExpireAt = BigInteger.ZERO;
+        if (!policyInfo.getString("expire_at").isEmpty()) {
+            policyExpireAt = new BigInteger(policyInfo.getString("expire_at"));
+        }
+
         String expireAt = "";
         if (labelExpireAt.compareTo(policyExpireAt) > 0) {
             expireAt = policyExpireAt.toString();
@@ -321,6 +329,9 @@ public class PdsPolicy {
         }
 
         return Map.ofEntries(
+                Map.entry("policy_id", policy_id),
+                Map.entry("label_id", labelId),
+                Map.entry("name", policyInfo.getString("name")),
                 Map.entry("checked", checked),
                 Map.entry("expire_at", expireAt)
         );
