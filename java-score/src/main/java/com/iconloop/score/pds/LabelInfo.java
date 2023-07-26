@@ -1,101 +1,141 @@
 package com.iconloop.score.pds;
 
-import com.eclipsesource.json.Json;
-import com.eclipsesource.json.JsonObject;
-import com.eclipsesource.json.JsonValue;
-import score.Address;
+import score.ObjectReader;
+import score.ObjectWriter;
 
+import java.math.BigInteger;
 import java.util.Map;
 
 
 public class LabelInfo {
     private final String labelId;
-    private final JsonObject jsonObject;
+    private String name;
+    private String owner;
+    private String producer;
+    private String producerExpireAt;
+    private String capsule;
+    private String data;
+    private String dataUpdated;
+    private String[] policies;
+    private String created;
+    private String expireAt;
 
-    public LabelInfo(String label_id) {
-        this.labelId = label_id;
-        this.jsonObject = new JsonObject();
+
+    public LabelInfo(
+            String labelId,
+            String name,
+            String owner,
+            String producer,
+            String producerExpireAt,
+            String capsule,
+            String data,
+            String dataUpdated,
+            String[] policies,
+            String created,
+            String expireAt) {
+        this.labelId = labelId;
+        this.name = name;
+        this.owner = owner;
+        this.producer = producer;
+        this.producerExpireAt = producerExpireAt;
+        this.capsule = capsule;
+        this.data = data;
+        this.dataUpdated = dataUpdated;
+        this.policies = policies;
+        this.created = created;
+        this.expireAt = expireAt;
     }
 
-    public String getString(String keyName) {
-        return this.jsonObject.getString(keyName, "");
+    public void update(String name,
+                       String owner,
+                       String producer,
+                       String producerExpireAt,
+                       String capsule,
+                       String data,
+                       String dataUpdated,
+                       String[] policies,
+                       String created,
+                       String expireAt) {
+        this.name = (name == null) ? this.name : name;
+        this.owner = (owner == null) ? this.owner : owner;
+        this.producer = (producer == null) ? this.producer : producer;
+        this.producerExpireAt = (producerExpireAt == null) ? this.producerExpireAt : producerExpireAt;
+        this.capsule = (capsule == null) ? this.capsule : capsule;
+        this.data = (data == null) ? this.data : data;
+        this.dataUpdated = (dataUpdated == null) ? this.dataUpdated : dataUpdated;
+        this.policies = (policies == null) ? this.policies : policies;
+        this.created = (created == null) ? this.created : created;
+        this.expireAt = (expireAt == null) ? this.expireAt : expireAt;
     }
 
-    public int getInt(String keyName) {
-        return this.jsonObject.getInt(keyName, 0);
+    public boolean checkOwner(String owner) {
+        return this.owner.equals(owner);
     }
 
-    public JsonObject getJsonObject() { return this.jsonObject; }
-
-    public void fromParams(String name,
-                           String owner,
-                           String producer,
-                           String producer_expire_at,
-                           String capsule,
-                           String data,
-                           String data_updated,
-                           String[] policies,
-                           String created,
-                           String expire_at) {
-        String policiesJsonString = Helper.StringListToJsonString(policies);
-        this.jsonObject.set("label_id", this.labelId);
-        this.jsonObject.set("name", (name == null) ? this.jsonObject.getString("name", "") : name);
-        this.jsonObject.set("owner", (owner == null) ? this.jsonObject.getString("owner", "") : owner);
-        this.jsonObject.set("producer", (producer == null) ? this.jsonObject.getString("producer", "") : producer);
-        this.jsonObject.set("producer_expire_at", (producer_expire_at == null) ? this.jsonObject.getString("producer_expire_at", "") : producer_expire_at);
-        this.jsonObject.set("capsule", (capsule == null) ? this.jsonObject.getString("capsule", "") : capsule);
-        this.jsonObject.set("data", (data == null) ? this.jsonObject.getString("data", "") : data);
-        this.jsonObject.set("data_updated", (data_updated == null) ? this.jsonObject.getString("data_updated", "") : data_updated);
-        this.jsonObject.set("policies", (policies == null) ? this.jsonObject.getString("policies", "") : policiesJsonString);
-        this.jsonObject.set("created", (created.isEmpty()) ? this.jsonObject.getString("created", "") : created);
-        this.jsonObject.set("expire_at", (expire_at == null) ? this.jsonObject.getString("expire_at", "") : expire_at);
+    public String getProducer() {
+        return this.producer;
     }
 
-    public static LabelInfo fromString(String label_info) {
-        JsonValue jsonValue = Json.parse(label_info);
-        JsonObject json = jsonValue.asObject();
-        String labelId = json.getString("label_id", "");
-
-        LabelInfo labelInfo = new LabelInfo(labelId);
-        JsonObject jsonObject = labelInfo.getJsonObject();
-
-        jsonObject.set("label_id", labelId);
-        jsonObject.set("name", json.getString("name", jsonObject.getString("name", "")));
-        jsonObject.set("owner", json.getString("owner", jsonObject.getString("owner", "")));
-        jsonObject.set("producer", json.getString("producer", jsonObject.getString("producer", "")));
-        jsonObject.set("producer_expire_at", json.getString("producer_expire_at", jsonObject.getString("producer_expire_at", "")));
-        jsonObject.set("capsule", json.getString("capsule", jsonObject.getString("capsule", "")));
-        jsonObject.set("data", json.getString("data", jsonObject.getString("data", "")));
-        jsonObject.set("data_updated", json.getString("data_updated", jsonObject.getString("data_updated", "")));
-        jsonObject.set("policies", json.getString("policies", jsonObject.getString("policies", "")));
-        jsonObject.set("created", json.getString("created", jsonObject.getString("created", "")));
-        jsonObject.set("expire_at", json.getString("expire_at", jsonObject.getString("expire_at", "")));
-
-        return labelInfo;
+    public void setPolicies(String[] policies) {
+        this.policies = policies;
     }
 
-    public String toString() {
-        return this.jsonObject.toString();
+    public String[] getPolicies() {
+        return this.policies;
     }
 
-    public String[] policyList() {
-        String policyJsonString = this.jsonObject.getString("policies", "");
-        return Helper.JsonStringToStringList("policies", policyJsonString);
+    public BigInteger getExpireAt() {
+        return (this.expireAt.isEmpty()) ? BigInteger.ZERO : new BigInteger(this.expireAt);
+    }
+
+    public static void writeObject(ObjectWriter w, LabelInfo t) {
+        String policiesJsonString = Helper.StringListToJsonString(t.policies);
+        w.beginList(11);
+        w.writeNullable(t.labelId);
+        w.writeNullable(t.name);
+        w.writeNullable(t.owner);
+        w.writeNullable(t.producer);
+        w.writeNullable(t.producerExpireAt);
+        w.writeNullable(t.capsule);
+        w.writeNullable(t.data);
+        w.writeNullable(t.dataUpdated);
+        w.writeNullable(policiesJsonString);
+        w.writeNullable(t.created);
+        w.writeNullable(t.expireAt);
+        w.end();
+    }
+
+    public static LabelInfo readObject(ObjectReader r) {
+        r.beginList();
+        LabelInfo t = new LabelInfo(
+                r.readNullable(String.class),
+                r.readNullable(String.class),
+                r.readNullable(String.class),
+                r.readNullable(String.class),
+                r.readNullable(String.class),
+                r.readNullable(String.class),
+                r.readNullable(String.class),
+                r.readNullable(String.class),
+                Helper.JsonStringToStringList("policies", r.readNullable(String.class)),
+                r.readNullable(String.class),
+                r.readNullable(String.class));
+        r.end();
+        return t;
     }
 
     public Map<String, Object> toMap() {
         return Map.ofEntries(
-                Map.entry("label_id", this.jsonObject.getString("label_id", "")),
-                Map.entry("name", this.jsonObject.getString("name", "")),
-                Map.entry("owner", this.jsonObject.getString("owner", "")),
-                Map.entry("producer", this.jsonObject.getString("producer", "")),
-                Map.entry("producer_expire_at", this.jsonObject.getString("producer_expire_at", "")),
-                Map.entry("capsule", this.jsonObject.getString("capsule", "")),
-                Map.entry("data", this.jsonObject.getString("data", "")),
-                Map.entry("data_updated", this.jsonObject.getString("data_updated", "")),
-                Map.entry("policies", policyList()),
-                Map.entry("created", this.jsonObject.getString("created", "")),
-                Map.entry("expire_at", this.jsonObject.getString("expire_at", ""))
+                Map.entry("label_id", this.labelId),
+                Map.entry("name", this.name),
+                Map.entry("owner", this.owner),
+                Map.entry("producer", this.producer),
+                Map.entry("producer_expire_at", this.producerExpireAt),
+                Map.entry("capsule", this.capsule),
+                Map.entry("data", this.data),
+                Map.entry("data_updated", this.dataUpdated),
+                Map.entry("policies", this.policies),
+                Map.entry("created", this.created),
+                Map.entry("expire_at", this.expireAt)
         );
     }
 }

@@ -53,7 +53,7 @@ public class PdsPolicyTest extends TestBase {
         did_sign = new byte[65];
         System.arraycopy(signature.getR(), 0, did_sign, 0, 32);
     }
-
+    
     @Test
     void addLabel() {
         pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_A000", "TEST_LABEL_A", null, null, owners[0].getAddress().toString(), "", "");
