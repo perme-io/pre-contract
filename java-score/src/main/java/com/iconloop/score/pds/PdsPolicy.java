@@ -29,7 +29,7 @@ public class PdsPolicy {
     private final ArrayDB<String> peers = Context.newArrayDB("peers", String.class);
     private final DictDB<String, LabelInfo> labelInfos;
     private final DictDB<String, NodeInfo> nodeInfos;
-    private final DictDB<String, String> policyInfos;
+    private final DictDB<String, PolicyInfo> policyInfos;
     private final VarDB<BigInteger> labelCount = Context.newVarDB("labelCount", BigInteger.class);
     private final VarDB<BigInteger> policyCount = Context.newVarDB("policyCount", BigInteger.class);
     private final VarDB<BigInteger> minStakeForServe = Context.newVarDB("minStakeForServe", BigInteger.class);
@@ -37,7 +37,7 @@ public class PdsPolicy {
     public PdsPolicy() {
         this.labelInfos = Context.newDictDB("labelInfos", LabelInfo.class);
         this.nodeInfos = Context.newDictDB("nodeInfos", NodeInfo.class);
-        this.policyInfos = Context.newDictDB("policyInfos", String.class);
+        this.policyInfos = Context.newDictDB("policyInfos", PolicyInfo.class);
     }
 
     @External()
@@ -110,10 +110,10 @@ public class PdsPolicy {
         String[] policyList = labelInfo.getPolicies();
 
         for (String policyId : policyList) {
-            if (!this.policyInfos.getOrDefault(policyId, "").isEmpty()) {
-                PolicyInfo policyInfo = PolicyInfo.fromString(this.policyInfos.get(policyId));
-                PDSEvent(EventType.RemovePolicy.name(), policyId, policyInfo.getString("consumer"));
-                this.policyInfos.set(policyId, "");
+            PolicyInfo policyInfo = this.policyInfos.get(policyId);
+            if (policyInfo != null) {
+                PDSEvent(EventType.RemovePolicy.name(), policyId, policyInfo.getConsumer());
+                this.policyInfos.set(policyId, null);
             }
         }
 
@@ -186,7 +186,7 @@ public class PdsPolicy {
 
     @External(readonly=true)
     public Map<String, Object> get_policy(String policy_id) {
-        PolicyInfo policyInfo = PolicyInfo.fromString(this.policyInfos.get(policy_id));
+        PolicyInfo policyInfo = this.policyInfos.get(policy_id);
         return policyInfo.toMap();
     }
 
@@ -201,9 +201,8 @@ public class PdsPolicy {
                            @Optional byte[] owner_sign,
                            @Optional String[] proxies,
                            @Optional String expire_at) {
-        PolicyInfo policyInfo = new PolicyInfo(policy_id);
         Context.require(!policy_id.isEmpty(), "Blank key is not allowed.");
-        Context.require(this.policyInfos.getOrDefault(policy_id, "").isEmpty(), "It has already been added.");
+        Context.require(this.policyInfos.get(policy_id) == null, "It has already been added.");
 
         LabelInfo labelInfo = this.labelInfos.get(label_id);
         String owner = Context.getCaller().toString();
@@ -224,10 +223,10 @@ public class PdsPolicy {
         BigInteger blockTimeStamp = new BigInteger(String.valueOf(Context.getBlockTimestamp()));
         String expireAt =  (expire_at == null) ? String.valueOf(blockTimeStamp.add(ONE_YEAR)) : expire_at;
 
-        policyInfo.fromParams(
-                label_id, name, owner, consumer, threshold, proxy_number, proxies, String.valueOf(Context.getBlockTimestamp()), expireAt
+        PolicyInfo policyInfo = new PolicyInfo(
+                policy_id, label_id, name, owner, consumer, threshold, proxy_number, proxies, String.valueOf(Context.getBlockTimestamp()), expireAt
         );
-        this.policyInfos.set(policy_id, policyInfo.toString());
+        this.policyInfos.set(policy_id, policyInfo);
         this.labelInfos.set(label_id, labelInfo);
         PDSEvent(EventType.AddPolicy.name(), policy_id, consumer);
 
@@ -237,21 +236,20 @@ public class PdsPolicy {
 
     @External()
     public void remove_policy(String policy_id, @Optional String owner_did, @Optional byte[] owner_sign) {
-        Context.require(!this.policyInfos.getOrDefault(policy_id, "").isEmpty(), "Invalid request target.");
+        PolicyInfo policyInfo = this.policyInfos.get(policy_id);
+        Context.require(policyInfo != null, "Invalid request target.");
 
-        PolicyInfo policyInfo = PolicyInfo.fromString(this.policyInfos.get(policy_id));
         // Verify policy owner
         String owner = Context.getCaller().toString();
         if (owner_did != null) {
             Context.require(verifySign(owner_did, owner_sign), "Invalid did signature.");
             owner = owner_did;
         }
-        if (!policyInfo.getString("owner").equals(owner)) {
+        if (!policyInfo.checkOwner(owner)) {
             Context.revert(101, "You do not have permission.");
         }
 
-        String labelId = policyInfo.getString("label_id");
-        LabelInfo labelInfo = this.labelInfos.get(labelId);
+        LabelInfo labelInfo = this.labelInfos.get(policyInfo.getLabelId());
         // Verify label owner
         if (!labelInfo.checkOwner(owner)) {
             Context.revert(101, "You do not have permission.");
@@ -270,11 +268,11 @@ public class PdsPolicy {
             }
             labelInfo.setPolicies(newPolicyList);
 
-            this.labelInfos.set(labelId, labelInfo);
-            PDSEvent(EventType.RemovePolicy.name(), policy_id, policyInfo.getString("consumer"));
+            this.labelInfos.set(policyInfo.getLabelId(), labelInfo);
+            PDSEvent(EventType.RemovePolicy.name(), policy_id, policyInfo.getConsumer());
         }
 
-        this.policyInfos.set(policy_id, "");
+        this.policyInfos.set(policy_id, null);
 
         BigInteger total = this.policyCount.getOrDefault(BigInteger.ZERO);
         this.policyCount.set(total.subtract(BigInteger.ONE));
@@ -284,17 +282,15 @@ public class PdsPolicy {
     public Map<String, Object> check_policy(String policy_id,
                                             @Optional String owner,
                                             @Optional String consumer) {
-        Context.require(!this.policyInfos.getOrDefault(policy_id, "").isEmpty(), "Invalid request target.");
+        PolicyInfo policyInfo = this.policyInfos.get(policy_id);
+        Context.require(policyInfo != null, "Invalid request target.");
         boolean checked = owner != null || consumer != null;
 
-        PolicyInfo policyInfo = PolicyInfo.fromString(this.policyInfos.get(policy_id));
-        String labelId = policyInfo.getString("label_id");
-
-        LabelInfo labelInfo = this.labelInfos.get(labelId);
+        LabelInfo labelInfo = this.labelInfos.get(policyInfo.getLabelId());
         Context.require(labelInfo != null, "Invalid request target.");
 
         if (owner != null) {
-            if (!policyInfo.getString("owner").equals(owner)) {
+            if (!policyInfo.checkOwner(owner)) {
                 checked = false;
             }
 
@@ -304,15 +300,15 @@ public class PdsPolicy {
         }
 
         if (consumer != null) {
-            if (!policyInfo.getString("consumer").equals(consumer)) {
+            if (!policyInfo.getConsumer().equals(consumer)) {
                 checked = false;
             }
         }
 
         BigInteger labelExpireAt = labelInfo.getExpireAt();
         BigInteger policyExpireAt = BigInteger.ZERO;
-        if (!policyInfo.getString("expire_at").isEmpty()) {
-            policyExpireAt = new BigInteger(policyInfo.getString("expire_at"));
+        if (!policyInfo.getExpireAt().isEmpty()) {
+            policyExpireAt = new BigInteger(policyInfo.getExpireAt());
         }
 
         String expireAt = "";
@@ -324,8 +320,8 @@ public class PdsPolicy {
 
         return Map.ofEntries(
                 Map.entry("policy_id", policy_id),
-                Map.entry("label_id", labelId),
-                Map.entry("name", policyInfo.getString("name")),
+                Map.entry("label_id", policyInfo.getLabelId()),
+                Map.entry("name", policyInfo.getName()),
                 Map.entry("checked", checked),
                 Map.entry("expire_at", expireAt)
         );

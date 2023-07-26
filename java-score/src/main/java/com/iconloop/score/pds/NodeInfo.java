@@ -18,7 +18,7 @@ public class NodeInfo {
     private BigInteger stake;
     private BigInteger reward;
 
-    public NodeInfo(String peer_id,
+    public NodeInfo(String peerId,
                     String name,
                     String endpoint,
                     String comment,
@@ -26,7 +26,7 @@ public class NodeInfo {
                     Address owner,
                     BigInteger stake,
                     BigInteger reward) {
-        this.peerId = peer_id;
+        this.peerId = peerId;
         this.name = name;
         this.endpoint = endpoint;
         this.comment = comment;

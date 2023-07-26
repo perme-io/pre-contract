@@ -143,6 +143,15 @@ public class PdsPolicyTest extends TestBase {
     }
 
     @Test
+    void getPolicy() {
+        pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_FOR_POLICY", "TEST_LABEL_A", owner_did, did_sign, owner_did, "", "");
+        pdsPolicyScore.invoke(owners[0], "add_policy","TEST_POLICY_A000", "TEST_LABEL_FOR_POLICY", "TEST_POLICY_A", owner_did, 3, 5, owner_did, did_sign, null, null);
+
+        var policy = (Map<String, Object>) pdsPolicyScore.call("get_policy","TEST_POLICY_A000");
+        assertEquals("TEST_POLICY_A", policy.get("name"));
+    }
+
+    @Test
     void addNode() {
         pdsPolicyScore.invoke(owners[0], "add_node","TEST_NODE_A000", "111.222.333.1", null, null, null);
         verify(pdsPolicySpy).PDSEvent(EventType.AddNode.name(), "TEST_NODE_A000", "111.222.333.1");

@@ -21,18 +21,17 @@ public class LabelInfo {
     private String expireAt;
 
 
-    public LabelInfo(
-            String labelId,
-            String name,
-            String owner,
-            String producer,
-            String producerExpireAt,
-            String capsule,
-            String data,
-            String dataUpdated,
-            String[] policies,
-            String created,
-            String expireAt) {
+    public LabelInfo(String labelId,
+                     String name,
+                     String owner,
+                     String producer,
+                     String producerExpireAt,
+                     String capsule,
+                     String data,
+                     String dataUpdated,
+                     String[] policies,
+                     String created,
+                     String expireAt) {
         this.labelId = labelId;
         this.name = name;
         this.owner = owner;
