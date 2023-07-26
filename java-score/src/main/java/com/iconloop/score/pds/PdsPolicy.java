@@ -28,16 +28,16 @@ public class PdsPolicy {
 
     private final ArrayDB<String> peers = Context.newArrayDB("peers", String.class);
     private final DictDB<String, LabelInfo> labelInfos;
+    private final DictDB<String, NodeInfo> nodeInfos;
     private final DictDB<String, String> policyInfos;
-    private final DictDB<String, String> nodeInfos;
     private final VarDB<BigInteger> labelCount = Context.newVarDB("labelCount", BigInteger.class);
     private final VarDB<BigInteger> policyCount = Context.newVarDB("policyCount", BigInteger.class);
     private final VarDB<BigInteger> minStakeForServe = Context.newVarDB("minStakeForServe", BigInteger.class);
 
     public PdsPolicy() {
         this.labelInfos = Context.newDictDB("labelInfos", LabelInfo.class);
+        this.nodeInfos = Context.newDictDB("nodeInfos", NodeInfo.class);
         this.policyInfos = Context.newDictDB("policyInfos", String.class);
-        this.nodeInfos = Context.newDictDB("nodeInfos", String.class);
     }
 
     @External()
@@ -333,8 +333,8 @@ public class PdsPolicy {
 
     @External(readonly=true)
     public Map<String, Object> get_node(String peer_id) {
-        NodeInfo nodeInfo = NodeInfo.fromString(this.nodeInfos.get(peer_id));
-        return nodeInfo.toMap(this.peers.size());
+        NodeInfo nodeInfo = this.nodeInfos.get(peer_id);
+        return nodeInfo.toMap();
     }
 
     @External()
@@ -344,9 +344,8 @@ public class PdsPolicy {
                          @Optional String name,
                          @Optional String comment,
                          @Optional Address owner) {
-        NodeInfo nodeInfo = new NodeInfo(peer_id);
         Context.require(!peer_id.isEmpty(), "Blank key is not allowed.");
-        Context.require(this.nodeInfos.getOrDefault(peer_id, "").isEmpty(), "It has already been added.");
+        Context.require(this.nodeInfos.get(peer_id) == null, "It has already been added.");
 
         Address ownerAddress = (owner == null) ? Context.getCaller() : owner;
         BigInteger stake = this.minStakeForServe.getOrDefault(BigInteger.ZERO);
@@ -357,26 +356,26 @@ public class PdsPolicy {
             stake = Context.getValue();
         }
 
-        nodeInfo.fromParams(endpoint, name, comment, String.valueOf(Context.getBlockTimestamp()), ownerAddress, stake, BigInteger.valueOf(0));
-        this.nodeInfos.set(peer_id, nodeInfo.toString());
+        NodeInfo nodeInfo = new NodeInfo(peer_id, name, endpoint, comment, String.valueOf(Context.getBlockTimestamp()), ownerAddress, stake, BigInteger.valueOf(0));
+        this.nodeInfos.set(peer_id, nodeInfo);
 
         removeNode(peer_id);
         this.peers.add(peer_id);
-        PDSEvent(EventType.AddNode.name(), peer_id, nodeInfo.getString("endpoint"));
+        PDSEvent(EventType.AddNode.name(), peer_id, nodeInfo.getEndpoint());
     }
 
     @External()
     public void remove_node(String peer_id) {
-        Context.require(!this.nodeInfos.getOrDefault(peer_id, "").isEmpty(), "Invalid request target.");
+        NodeInfo nodeInfo = this.nodeInfos.get(peer_id);
+        Context.require(nodeInfo != null, "Invalid request target.");
 
-        NodeInfo nodeInfo = NodeInfo.fromString(this.nodeInfos.get(peer_id));
-        if (!nodeInfo.getString("owner").equals(Context.getCaller().toString())) {
+        if (!nodeInfo.checkOwner(Context.getCaller())) {
             Context.revert(101, "You do not have permission.");
         }
 
-        this.nodeInfos.set(peer_id, "");
+        this.nodeInfos.set(peer_id, null);
         removeNode(peer_id);
-        PDSEvent(EventType.RemoveNode.name(), peer_id, nodeInfo.getString("endpoint"));
+        PDSEvent(EventType.RemoveNode.name(), peer_id, nodeInfo.getEndpoint());
     }
 
     @External()
@@ -386,10 +385,10 @@ public class PdsPolicy {
                             @Optional String name,
                             @Optional String comment,
                             @Optional Address owner) {
-        Context.require(!this.nodeInfos.getOrDefault(peer_id, "").isEmpty(), "Invalid request target.");
+        NodeInfo nodeInfo = this.nodeInfos.get(peer_id);
+        Context.require(nodeInfo != null, "Invalid request target.");
 
-        NodeInfo nodeInfo = NodeInfo.fromString(this.nodeInfos.get(peer_id));
-        if (!nodeInfo.getString("owner").equals(Context.getCaller().toString())) {
+        if (!nodeInfo.checkOwner(Context.getCaller())) {
             Context.revert(101, "You do not have permission.");
         }
 
@@ -397,18 +396,18 @@ public class PdsPolicy {
         BigInteger stake = this.minStakeForServe.getOrDefault(BigInteger.ZERO);
 
         if (stake != BigInteger.ZERO) {
-            BigInteger prevStake = new BigInteger(nodeInfo.getString("stake"), 16);
+            BigInteger prevStake =nodeInfo.getStake();
             BigInteger newStake = prevStake.add(Context.getValue());
             Context.require(newStake.compareTo(ONE_ICX.multiply(stake)) >= 0);
             stake = newStake;
         }
 
-        nodeInfo.fromParams(endpoint, name, comment, "", ownerAddress, stake, BigInteger.valueOf(0));
-        this.nodeInfos.set(peer_id, nodeInfo.toString());
+        nodeInfo.update(name, endpoint, comment, null, ownerAddress, stake, BigInteger.valueOf(0));
+        this.nodeInfos.set(peer_id, nodeInfo);
 
         removeNode(peer_id);
         this.peers.add(peer_id);
-        PDSEvent(EventType.UpdateNode.name(), peer_id, nodeInfo.getString("endpoint"));
+        PDSEvent(EventType.UpdateNode.name(), peer_id, nodeInfo.getEndpoint());
     }
 
     private void removeNode(String peer_id) {
@@ -437,7 +436,7 @@ public class PdsPolicy {
         int peer_count = this.peers.size();
         for (int i = 0; i < peer_count; i++) {
             peer_id = this.peers.pop();
-            this.nodeInfos.set(peer_id, "");
+            this.nodeInfos.set(peer_id, null);
         }
     }
 
@@ -446,8 +445,8 @@ public class PdsPolicy {
         Object[] allNode = new Object[this.peers.size()];
 
         for (int i=0; i < this.peers.size(); i++) {
-            NodeInfo nodeInfo = NodeInfo.fromString(this.nodeInfos.get(this.peers.get(i)));
-            allNode[i] = nodeInfo.toMap(this.peers.size());
+            NodeInfo nodeInfo = this.nodeInfos.get(this.peers.get(i));
+            allNode[i] = nodeInfo.toMap();
         }
 
         return List.of(allNode);
