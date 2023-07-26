@@ -53,7 +53,7 @@ public class PdsPolicyTest extends TestBase {
         did_sign = new byte[65];
         System.arraycopy(signature.getR(), 0, did_sign, 0, 32);
     }
-    
+
     @Test
     void addLabel() {
         pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_A000", "TEST_LABEL_A", null, null, owners[0].getAddress().toString(), "", "");
@@ -132,5 +132,36 @@ public class PdsPolicyTest extends TestBase {
 
         var policy_checked_null = (Map<String, Object>) pdsPolicyScore.call("check_policy","TEST_POLICY_A000", null, null);
         assertEquals(policy_checked_null.get("checked"), false);
+    }
+
+    @Test
+    void addNode() {
+        pdsPolicyScore.invoke(owners[0], "add_node","TEST_NODE_A000", "111.222.333.1", null, null, null);
+        verify(pdsPolicySpy).PDSEvent(EventType.AddNode.name(), "TEST_NODE_A000", "111.222.333.1");
+    }
+
+    @Test
+    void removeNode() {
+        pdsPolicyScore.invoke(owners[0], "add_node","TEST_NODE_TO_REMOVE", "111.222.333.1", null, null, null);
+
+        pdsPolicyScore.invoke(owners[0], "remove_node","TEST_NODE_TO_REMOVE");
+        verify(pdsPolicySpy).PDSEvent(EventType.RemoveNode.name(), "TEST_NODE_TO_REMOVE", "111.222.333.1");
+    }
+
+    @Test
+    void updateNode() {
+        pdsPolicyScore.invoke(owners[0], "add_node","TEST_NODE_TO_UPDATE", "111.222.333.1", null, null, null);
+
+        pdsPolicyScore.invoke(owners[0], "update_node","TEST_NODE_TO_UPDATE", "111.222.333.2", null, null, null);
+        verify(pdsPolicySpy).PDSEvent(EventType.UpdateNode.name(), "TEST_NODE_TO_UPDATE", "111.222.333.2");
+    }
+
+    @Test
+    void getNode() {
+        pdsPolicyScore.invoke(owners[0], "add_node","TEST_NODE_TO_GET", "111.222.333.1", null, null, null);
+
+        var node = (Map<String, Object>) pdsPolicyScore.call("get_node","TEST_NODE_TO_GET");
+        assertEquals(node.get("peer_id"), "TEST_NODE_TO_GET");
+        assertEquals(node.get("endpoint"), "111.222.333.1");
     }
 }
