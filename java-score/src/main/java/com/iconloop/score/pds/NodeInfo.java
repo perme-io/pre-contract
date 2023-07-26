@@ -1,9 +1,8 @@
 package com.iconloop.score.pds;
 
-import com.eclipsesource.json.Json;
-import com.eclipsesource.json.JsonObject;
-import com.eclipsesource.json.JsonValue;
 import score.Address;
+import score.ObjectReader;
+import score.ObjectWriter;
 
 import java.math.BigInteger;
 import java.util.Map;
@@ -11,70 +10,98 @@ import java.util.Map;
 
 public class NodeInfo {
     private final String peerId;
-    private final JsonObject jsonObject;
+    private String name;
+    private String endpoint;
+    private String comment;
+    private String created;
+    private Address owner;
+    private BigInteger stake;
+    private BigInteger reward;
 
-    public NodeInfo(String peer_id) {
-        this.peerId = peer_id;
-        this.jsonObject = new JsonObject();
+    public NodeInfo(String peerId,
+                    String name,
+                    String endpoint,
+                    String comment,
+                    String created,
+                    Address owner,
+                    BigInteger stake,
+                    BigInteger reward) {
+        this.peerId = peerId;
+        this.name = name;
+        this.endpoint = endpoint;
+        this.comment = comment;
+        this.created = created;
+        this.owner = owner;
+        this.stake = stake;
+        this.reward = reward;
     }
 
-    public String getString(String keyName) {
-        return this.jsonObject.getString(keyName, "");
+    public void update(String name,
+                       String endpoint,
+                       String comment,
+                       String created,
+                       Address owner,
+                       BigInteger stake,
+                       BigInteger reward) {
+        this.name = (name == null) ? this.name : name;
+        this.endpoint = (endpoint == null) ? this.endpoint : endpoint;
+        this.comment = (comment == null) ? this.comment : comment;
+        this.created = (created == null) ? this.created : created;
+        this.owner = (owner == null) ? this.owner : owner;
+        this.stake = (stake == null) ? this.stake : stake;
+        this.reward = (reward == null) ? this.reward : reward;
     }
 
-    public JsonObject getJsonObject() { return this.jsonObject; }
-
-    public void fromParams(String endpoint,
-                           String name,
-                           String comment,
-                           String created,
-                           Address owner,
-                           BigInteger stake,
-                           BigInteger reward) {
-        this.jsonObject.set("peer_id", this.peerId);
-        this.jsonObject.set("endpoint", (endpoint == null) ? this.jsonObject.getString("endpoint", "") : endpoint);
-        this.jsonObject.set("name", (name == null) ? this.jsonObject.getString("name", "") : name);
-        this.jsonObject.set("comment", (comment == null) ? this.jsonObject.getString("comment", "") : comment);
-        this.jsonObject.set("created", (created.isEmpty()) ? this.jsonObject.getString("created", "") : created);
-        this.jsonObject.set("owner", (owner == null) ? this.jsonObject.getString("owner", "") : owner.toString());
-        this.jsonObject.set("stake", (stake.intValue() == 0) ? this.jsonObject.getString("stake", "0") : stake.toString(16));
-        this.jsonObject.set("reward", (reward.intValue() == 0) ? this.jsonObject.getString("reward", "0") : reward.toString(16));
+    public boolean checkOwner(Address owner) {
+        return this.owner.equals(owner);
     }
 
-    public static NodeInfo fromString(String node_info) {
-        JsonValue jsonValue = Json.parse(node_info);
-        JsonObject json = jsonValue.asObject();
-        String peerId = json.getString("peer_id", "");
-
-        NodeInfo nodeInfo = new NodeInfo(peerId);
-        JsonObject jsonObject = nodeInfo.getJsonObject();
-
-        jsonObject.set("peer_id", peerId);
-        jsonObject.set("endpoint", json.getString("endpoint", jsonObject.getString("endpoint", "")));
-        jsonObject.set("name", json.getString("name", jsonObject.getString("name", "")));
-        jsonObject.set("comment", json.getString("comment", jsonObject.getString("comment", "")));
-        jsonObject.set("created", json.getString("created", jsonObject.getString("created", "")));
-        jsonObject.set("owner", json.getString("owner", jsonObject.getString("owner", "")));
-        jsonObject.set("stake", json.getString("stake", jsonObject.getString("stake", "0")));
-        jsonObject.set("reward", json.getString("reward", jsonObject.getString("reward", "0")));
-
-        return nodeInfo;
+    public String getEndpoint() {
+        return this.endpoint;
     }
 
-    public String toString() {
-        return this.jsonObject.toString();
+    public BigInteger getStake() {
+        return this.stake;
     }
 
-    public Map<String, Object> toMap(int nodeCount) {
+    public static void writeObject(ObjectWriter w, NodeInfo t) {
+        w.beginList(8);
+        w.writeNullable(t.peerId);
+        w.writeNullable(t.name);
+        w.writeNullable(t.endpoint);
+        w.writeNullable(t.comment);
+        w.writeNullable(t.created);
+        w.write(t.owner);
+        w.writeNullable(t.stake);
+        w.writeNullable(t.reward);
+        w.end();
+    }
+
+    public static NodeInfo readObject(ObjectReader r) {
+        r.beginList();
+        NodeInfo t = new NodeInfo(
+                r.readNullable(String.class),
+                r.readNullable(String.class),
+                r.readNullable(String.class),
+                r.readNullable(String.class),
+                r.readNullable(String.class),
+                r.readAddress(),
+                r.readNullable(BigInteger.class),
+                r.readNullable(BigInteger.class));
+        r.end();
+        return t;
+    }
+
+    public Map<String, Object> toMap() {
         return Map.ofEntries(
-                Map.entry("peer_id", this.jsonObject.getString("peer_id", "")),
-                Map.entry("endpoint", this.jsonObject.getString("endpoint", "")),
-                Map.entry("name", this.jsonObject.getString("name", "")),
-                Map.entry("comment", this.jsonObject.getString("comment", "")),
-                Map.entry("created", this.jsonObject.getString("created", "")),
-                Map.entry("owner", this.jsonObject.getString("owner", "")),
-                Map.entry("stake", "0x" + this.jsonObject.getString("stake", "0")),
-                Map.entry("reward", "0x" + this.jsonObject.getString("reward", "0"))
+                Map.entry("peer_id", this.peerId),
+                Map.entry("endpoint", this.endpoint),
+                Map.entry("name", (this.name == null) ? "" : this.name),
+                Map.entry("comment", (this.comment == null) ? "" : this.comment),
+                Map.entry("created", (this.created == null) ? "" : this.created),
+                Map.entry("owner", this.owner.toString()),
+                Map.entry("stake", (this.stake == null) ? BigInteger.ZERO : this.stake),
+                Map.entry("reward", (this.reward == null) ? BigInteger.ZERO : this.reward)
         );
     }
 }

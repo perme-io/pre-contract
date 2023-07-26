@@ -91,6 +91,14 @@ public class PdsPolicyTest extends TestBase {
     }
 
     @Test
+    void getLabel() {
+        pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_TO_GET", "TEST_LABEL_A", owner_did, did_sign, owner_did, "", "");
+
+        var label = (Map<String, Object>) pdsPolicyScore.call("get_label", "TEST_LABEL_TO_GET");
+        assertEquals("TEST_LABEL_A", label.get("name"));
+    }
+
+    @Test
     void addPolicy() {
         pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_FOR_POLICY", "TEST_LABEL_A", null, null, owners[0].getAddress().toString(), "", "");
 
@@ -122,15 +130,55 @@ public class PdsPolicyTest extends TestBase {
         pdsPolicyScore.invoke(owners[0], "add_policy","TEST_POLICY_A000", "TEST_LABEL_FOR_POLICY", "TEST_POLICY_A", owner_did, 3, 5, owner_did, did_sign, null, null);
 
         var policy_checked = (Map<String, Object>) pdsPolicyScore.call("check_policy","TEST_POLICY_A000", owner_did, owner_did);
-        assertEquals(policy_checked.get("checked"), true);
+        assertEquals(true, policy_checked.get("checked"));
 
         var policy_checked_owner_only = (Map<String, Object>) pdsPolicyScore.call("check_policy","TEST_POLICY_A000", owner_did, null);
-        assertEquals(policy_checked_owner_only.get("checked"), true);
+        assertEquals(true, policy_checked_owner_only.get("checked"));
 
         var policy_checked_consumer_only = (Map<String, Object>) pdsPolicyScore.call("check_policy","TEST_POLICY_A000", null, owner_did);
-        assertEquals(policy_checked_consumer_only.get("checked"), true);
+        assertEquals(true, policy_checked_consumer_only.get("checked"));
 
         var policy_checked_null = (Map<String, Object>) pdsPolicyScore.call("check_policy","TEST_POLICY_A000", null, null);
-        assertEquals(policy_checked_null.get("checked"), false);
+        assertEquals(false, policy_checked_null.get("checked"));
+    }
+
+    @Test
+    void getPolicy() {
+        pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_FOR_POLICY", "TEST_LABEL_A", owner_did, did_sign, owner_did, "", "");
+        pdsPolicyScore.invoke(owners[0], "add_policy","TEST_POLICY_A000", "TEST_LABEL_FOR_POLICY", "TEST_POLICY_A", owner_did, 3, 5, owner_did, did_sign, null, null);
+
+        var policy = (Map<String, Object>) pdsPolicyScore.call("get_policy","TEST_POLICY_A000");
+        assertEquals("TEST_POLICY_A", policy.get("name"));
+    }
+
+    @Test
+    void addNode() {
+        pdsPolicyScore.invoke(owners[0], "add_node","TEST_NODE_A000", "111.222.333.1", null, null, null);
+        verify(pdsPolicySpy).PDSEvent(EventType.AddNode.name(), "TEST_NODE_A000", "111.222.333.1");
+    }
+
+    @Test
+    void removeNode() {
+        pdsPolicyScore.invoke(owners[0], "add_node","TEST_NODE_TO_REMOVE", "111.222.333.1", null, null, null);
+
+        pdsPolicyScore.invoke(owners[0], "remove_node","TEST_NODE_TO_REMOVE");
+        verify(pdsPolicySpy).PDSEvent(EventType.RemoveNode.name(), "TEST_NODE_TO_REMOVE", "111.222.333.1");
+    }
+
+    @Test
+    void updateNode() {
+        pdsPolicyScore.invoke(owners[0], "add_node","TEST_NODE_TO_UPDATE", "111.222.333.1", null, null, null);
+
+        pdsPolicyScore.invoke(owners[0], "update_node","TEST_NODE_TO_UPDATE", "111.222.333.2", null, null, null);
+        verify(pdsPolicySpy).PDSEvent(EventType.UpdateNode.name(), "TEST_NODE_TO_UPDATE", "111.222.333.2");
+    }
+
+    @Test
+    void getNode() {
+        pdsPolicyScore.invoke(owners[0], "add_node","TEST_NODE_TO_GET", "111.222.333.1", null, null, null);
+
+        var node = (Map<String, Object>) pdsPolicyScore.call("get_node","TEST_NODE_TO_GET");
+        assertEquals("TEST_NODE_TO_GET", node.get("peer_id"));
+        assertEquals("111.222.333.1", node.get("endpoint"));
     }
 }

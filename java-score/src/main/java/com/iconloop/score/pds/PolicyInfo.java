@@ -1,9 +1,7 @@
 package com.iconloop.score.pds;
 
-import com.eclipsesource.json.Json;
-import com.eclipsesource.json.JsonObject;
-import com.eclipsesource.json.JsonValue;
-import score.Address;
+import score.ObjectReader;
+import score.ObjectWriter;
 
 import java.math.BigInteger;
 import java.util.Map;
@@ -11,88 +9,103 @@ import java.util.Map;
 
 public class PolicyInfo {
     private final String policyId;
-    private final JsonObject jsonObject;
+    private final String labelId;
+    private final String name;
+    private final String owner;
+    private final String consumer;
+    private final BigInteger threshold;
+    private final BigInteger proxyNumber;
+    private final String[] proxies;
+    private final String created;
+    private final String expireAt;
 
-    public PolicyInfo(String policy_id) {
-        this.policyId = policy_id;
-        this.jsonObject = new JsonObject();
+    public PolicyInfo(String policyId,
+                      String labelId,
+                      String name,
+                      String owner,
+                      String consumer,
+                      BigInteger threshold,
+                      BigInteger proxy_number,
+                      String[] proxies,
+                      String created,
+                      String expire_at) {
+        this.policyId = policyId;
+        this.labelId = labelId;
+        this.name = name;
+        this.owner = owner;
+        this.consumer = consumer;
+        this.threshold = threshold;
+        this.proxyNumber = proxy_number;
+        this.proxies = proxies;
+        this.created = created;
+        this.expireAt = expire_at;
     }
 
-    public String getString(String keyName) {
-        return this.jsonObject.getString(keyName, "");
+    public boolean checkOwner(String owner) {
+        return this.owner.equals(owner);
     }
 
-    public int getInt(String keyName) {
-        return this.jsonObject.getInt(keyName, 0);
+    public String getLabelId() {
+        return labelId;
     }
 
-    public JsonObject getJsonObject() { return this.jsonObject; }
-
-    public void fromParams(String label_id,
-                           String name,
-                           String owner,
-                           String consumer,
-                           BigInteger threshold,
-                           BigInteger proxy_number,
-                           String[] proxies,
-                           String created,
-                           String expire_at) {
-        String proxiesJsonString = Helper.StringListToJsonString(proxies);
-        this.jsonObject.set("policy_id", this.policyId);
-        this.jsonObject.set("label_id", (label_id == null) ? this.jsonObject.getString("label_id", "") : label_id);
-        this.jsonObject.set("name", (name == null) ? this.jsonObject.getString("name", "") : name);
-        this.jsonObject.set("owner", (owner == null) ? this.jsonObject.getString("owner", "") : owner);
-        this.jsonObject.set("consumer", (consumer == null) ? this.jsonObject.getString("consumer", "") : consumer);
-        this.jsonObject.set("threshold", (threshold.intValue() == 0) ? this.jsonObject.getInt("threshold", 0) : threshold.intValue());
-        this.jsonObject.set("proxy_number", (proxy_number.intValue() == 0) ? this.jsonObject.getInt("proxy_number", 0) : proxy_number.intValue());
-        this.jsonObject.set("proxies", (proxies == null) ? this.jsonObject.getString("proxies", "") : proxiesJsonString);
-        this.jsonObject.set("created", (created.isEmpty()) ? this.jsonObject.getString("created", "") : created);
-        this.jsonObject.set("expire_at", (expire_at == null) ? this.jsonObject.getString("expire_at", "") : expire_at);
+    public String getName() {
+        return name;
     }
 
-    public static PolicyInfo fromString(String policy_info) {
-        JsonValue jsonValue = Json.parse(policy_info);
-        JsonObject json = jsonValue.asObject();
-        String policyId = json.getString("policy_id", "");
-
-        PolicyInfo policyInfo = new PolicyInfo(policyId);
-        JsonObject jsonObject = policyInfo.getJsonObject();
-
-        jsonObject.set("policy_id", policyId);
-        jsonObject.set("label_id", json.getString("label_id", jsonObject.getString("label_id", "")));
-        jsonObject.set("name", json.getString("name", jsonObject.getString("name", "")));
-        jsonObject.set("owner", json.getString("owner", jsonObject.getString("owner", "")));
-        jsonObject.set("consumer", json.getString("consumer", jsonObject.getString("consumer", "")));
-        jsonObject.set("threshold", json.getInt("threshold", jsonObject.getInt("threshold", 0)));
-        jsonObject.set("proxy_number", json.getInt("proxy_number", jsonObject.getInt("proxy_number", 0)));
-        jsonObject.set("proxies", json.getString("proxies", jsonObject.getString("proxies", "")));
-        jsonObject.set("created", json.getString("created", jsonObject.getString("created", "")));
-        jsonObject.set("expire_at", json.getString("expire_at", jsonObject.getString("expire_at", "")));
-
-        return policyInfo;
+    public String getConsumer() {
+        return consumer;
     }
 
-    public String toString() {
-        return this.jsonObject.toString();
+    public String getExpireAt() {
+        return expireAt;
     }
 
-    public String[] proxyList() {
-        String proxiesJsonString = this.jsonObject.getString("proxies", "");
-        return Helper.JsonStringToStringList("proxies", proxiesJsonString);
+    public static void writeObject(ObjectWriter w, PolicyInfo t) {
+        String proxiesJsonString = Helper.StringListToJsonString(t.proxies);
+        w.beginList(10);
+        w.writeNullable(t.policyId);
+        w.writeNullable(t.labelId);
+        w.writeNullable(t.name);
+        w.writeNullable(t.owner);
+        w.writeNullable(t.consumer);
+        w.writeNullable(t.threshold);
+        w.writeNullable(t.proxyNumber);
+        w.writeNullable(proxiesJsonString);
+        w.writeNullable(t.created);
+        w.writeNullable(t.expireAt);
+        w.end();
+    }
+
+    public static PolicyInfo readObject(ObjectReader r) {
+        r.beginList();
+        PolicyInfo t = new PolicyInfo(
+                r.readNullable(String.class),
+                r.readNullable(String.class),
+                r.readNullable(String.class),
+                r.readNullable(String.class),
+                r.readNullable(String.class),
+                r.readNullable(BigInteger.class),
+                r.readNullable(BigInteger.class),
+                Helper.JsonStringToStringList("proxies", r.readNullable(String.class)),
+                r.readNullable(String.class),
+                r.readNullable(String.class));
+        r.end();
+        return t;
     }
 
     public Map<String, Object> toMap() {
         return Map.ofEntries(
-                Map.entry("policy_id", this.jsonObject.getString("policy_id", "")),
-                Map.entry("label_id", this.jsonObject.getString("label_id", "")),
-                Map.entry("name", this.jsonObject.getString("name", "")),
-                Map.entry("owner", this.jsonObject.getString("owner", "")),
-                Map.entry("consumer", this.jsonObject.getString("consumer", "")),
-                Map.entry("threshold", this.jsonObject.getInt("threshold", 0)),
-                Map.entry("proxy_number", this.jsonObject.getInt("proxy_number", 0)),
-                Map.entry("proxies", proxyList()),
-                Map.entry("created", this.jsonObject.getString("created", "")),
-                Map.entry("expire_at", this.jsonObject.getString("expire_at", ""))
+                Map.entry("policy_id", this.policyId),
+                Map.entry("label_id", this.labelId),
+                Map.entry("name", this.name),
+                Map.entry("owner", this.owner),
+                Map.entry("consumer", this.consumer),
+                Map.entry("threshold", this.threshold),
+                Map.entry("proxy_number", this.proxyNumber),
+                Map.entry("proxies", this.proxies),
+                Map.entry("created", this.created),
+                Map.entry("expireAt", this.expireAt)
         );
     }
 }
