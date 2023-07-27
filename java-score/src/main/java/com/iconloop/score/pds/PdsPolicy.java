@@ -348,7 +348,7 @@ public class PdsPolicy {
         Address ownerAddress = (owner == null) ? Context.getCaller() : owner;
         BigInteger stake = this.minStakeForServe.getOrDefault(BigInteger.ZERO);
 
-        if (stake != BigInteger.ZERO) {
+        if (!stake.equals(BigInteger.ZERO)) {
             // You need at least this.minStakeForServe(icx) to add a node.
             Context.require(Context.getValue().compareTo(ONE_ICX.multiply(stake)) >= 0);
             stake = Context.getValue();
@@ -393,7 +393,7 @@ public class PdsPolicy {
         Address ownerAddress = (owner == null) ? Context.getCaller() : owner;
         BigInteger stake = this.minStakeForServe.getOrDefault(BigInteger.ZERO);
 
-        if (stake != BigInteger.ZERO) {
+        if (!stake.equals(BigInteger.ZERO)) {
             BigInteger prevStake =nodeInfo.getStake();
             BigInteger newStake = prevStake.add(Context.getValue());
             Context.require(newStake.compareTo(ONE_ICX.multiply(stake)) >= 0);
