@@ -95,7 +95,7 @@ public class PdsPolicy {
                              @Optional String owner_did,
                              @Optional byte[] owner_sign) {
         LabelInfo labelInfo = this.labelInfos.get(label_id);
-        Context.require(labelInfo != null, "Invalid request target.");
+        Context.require(labelInfo != null, "Invalid request target(label).");
 
         // Verify owner
         String owner = Context.getCaller().toString();
@@ -134,7 +134,7 @@ public class PdsPolicy {
                              @Optional String producer_expire_at,
                              @Optional String expire_at) {
         LabelInfo labelInfo = this.labelInfos.get(label_id);
-        Context.require(labelInfo != null, "Invalid request target.");
+        Context.require(labelInfo != null, "Invalid request target(label).");
 
         // Verify owner
         String owner = Context.getCaller().toString();
@@ -167,7 +167,7 @@ public class PdsPolicy {
                             @Optional byte[] producer_sign,
                             @Optional String capsule) {
         LabelInfo labelInfo = this.labelInfos.get(label_id);
-        Context.require(labelInfo != null, "Invalid request target.");
+        Context.require(labelInfo != null, "Invalid request target(label).");
 
         // Verify producer
         String producer = Context.getCaller().toString();
@@ -205,6 +205,8 @@ public class PdsPolicy {
         Context.require(this.policyInfos.get(policy_id) == null, "It has already been added.");
 
         LabelInfo labelInfo = this.labelInfos.get(label_id);
+        Context.require(labelInfo != null, "Invalid request target(label).");
+
         String owner = Context.getCaller().toString();
         if (owner_did != null) {
             Context.require(verifySign(owner_did, owner_sign), "Invalid did signature.");
@@ -237,7 +239,7 @@ public class PdsPolicy {
     @External()
     public void remove_policy(String policy_id, @Optional String owner_did, @Optional byte[] owner_sign) {
         PolicyInfo policyInfo = this.policyInfos.get(policy_id);
-        Context.require(policyInfo != null, "Invalid request target.");
+        Context.require(policyInfo != null, "Invalid request target(policy).");
 
         // Verify policy owner
         String owner = Context.getCaller().toString();
@@ -283,11 +285,11 @@ public class PdsPolicy {
                                             @Optional String owner,
                                             @Optional String consumer) {
         PolicyInfo policyInfo = this.policyInfos.get(policy_id);
-        Context.require(policyInfo != null, "Invalid request target.");
+        Context.require(policyInfo != null, "Invalid request target(policy).");
         boolean checked = owner != null || consumer != null;
 
         LabelInfo labelInfo = this.labelInfos.get(policyInfo.getLabelId());
-        Context.require(labelInfo != null, "Invalid request target.");
+        Context.require(labelInfo != null, "Invalid request target(label).");
 
         if (owner != null) {
             if (!policyInfo.checkOwner(owner)) {
@@ -363,7 +365,7 @@ public class PdsPolicy {
     @External()
     public void remove_node(String peer_id) {
         NodeInfo nodeInfo = this.nodeInfos.get(peer_id);
-        Context.require(nodeInfo != null, "Invalid request target.");
+        Context.require(nodeInfo != null, "Invalid request target(node).");
 
         if (!nodeInfo.checkOwner(Context.getCaller())) {
             Context.revert(101, "You do not have permission.");
@@ -382,7 +384,7 @@ public class PdsPolicy {
                             @Optional String comment,
                             @Optional Address owner) {
         NodeInfo nodeInfo = this.nodeInfos.get(peer_id);
-        Context.require(nodeInfo != null, "Invalid request target.");
+        Context.require(nodeInfo != null, "Invalid request target(node).");
 
         if (!nodeInfo.checkOwner(Context.getCaller())) {
             Context.revert(101, "You do not have permission.");
