@@ -18,7 +18,7 @@ public class PolicyInfo {
     private final String[] proxies;
     private final String created;
     private final String expireAt;
-    private int nonce;
+    private BigInteger nonce;
 
     public PolicyInfo(String policyId,
                       String labelId,
@@ -30,7 +30,7 @@ public class PolicyInfo {
                       String[] proxies,
                       String created,
                       String expire_at,
-                      int nonce) {
+                      BigInteger nonce) {
         this.policyId = policyId;
         this.labelId = labelId;
         this.name = name;
@@ -65,12 +65,12 @@ public class PolicyInfo {
     }
 
     public int getNonce() {
-        return this.nonce;
+        return this.nonce.intValue();
     }
 
-    public boolean checkNonce(int nonce) {
+    public boolean checkNonce(BigInteger nonce) {
         // nonce should be increased by 1
-        return this.nonce == nonce - 1;
+        return this.nonce.equals(nonce.subtract(BigInteger.ONE));
     }
 
     public static void writeObject(ObjectWriter w, PolicyInfo t) {
@@ -103,7 +103,7 @@ public class PolicyInfo {
                 Helper.JsonStringToStringList("proxies", r.readNullable(String.class)),
                 r.readNullable(String.class),
                 r.readNullable(String.class),
-                r.readInt());
+                r.readBigInteger());
         r.end();
         return t;
     }

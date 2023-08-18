@@ -19,7 +19,7 @@ public class LabelInfo {
     private String[] policies;
     private String created;
     private String expireAt;
-    private int nonce;
+    private BigInteger nonce;
 
 
     public LabelInfo(String labelId,
@@ -33,7 +33,7 @@ public class LabelInfo {
                      String[] policies,
                      String created,
                      String expireAt,
-                     int nonce) {
+                     BigInteger nonce) {
         this.labelId = labelId;
         this.name = name;
         this.owner = owner;
@@ -68,7 +68,7 @@ public class LabelInfo {
         this.policies = (policies == null) ? this.policies : policies;
         this.created = (created == null) ? this.created : created;
         this.expireAt = (expireAt == null) ? this.expireAt : expireAt;
-        this.nonce++;
+        this.nonce = this.nonce.add(BigInteger.ONE);
     }
 
     public boolean checkOwner(String owner) {
@@ -92,12 +92,12 @@ public class LabelInfo {
     }
 
     public int getNonce() {
-        return this.nonce;
+        return this.nonce.intValue();
     }
 
-    public boolean checkNonce(int nonce) {
+    public boolean checkNonce(BigInteger nonce) {
         // nonce should be increased by 1
-        return this.nonce == nonce - 1;
+        return this.nonce.equals(nonce.subtract(BigInteger.ONE));
     }
 
     public static void writeObject(ObjectWriter w, LabelInfo t) {
@@ -132,7 +132,7 @@ public class LabelInfo {
                 Helper.JsonStringToStringList("policies", r.readNullable(String.class)),
                 r.readNullable(String.class),
                 r.readNullable(String.class),
-                r.readInt());
+                r.readBigInteger());
         r.end();
         return t;
     }

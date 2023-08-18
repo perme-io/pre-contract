@@ -4,8 +4,9 @@ import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
 import com.eclipsesource.json.JsonValue;
+import scorex.util.StringTokenizer;
 
-import java.util.StringTokenizer;
+import java.math.BigInteger;
 
 
 public class Helper {
@@ -65,6 +66,6 @@ public class Helper {
             nonce = did_info[3];
         }
 
-        return new DidMessage(did, kid, target, Integer.parseInt(nonce));
+        return new DidMessage(did, kid, target, new BigInteger(nonce, 10));
     }
 }

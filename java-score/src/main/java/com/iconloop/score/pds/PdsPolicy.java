@@ -84,7 +84,7 @@ public class PdsPolicy {
 
         BigInteger blockTimeStamp = new BigInteger(String.valueOf(Context.getBlockTimestamp()));
         String owner = Context.getCaller().toString();
-        int contentNonce = 0;
+        BigInteger contentNonce = BigInteger.ZERO;
         if (owner_did != null) {
             DidMessage didMessage = getDidMessage(owner_did, owner_sign);
             owner = didMessage.did;
@@ -229,7 +229,7 @@ public class PdsPolicy {
         Context.require(labelInfo != null, "Invalid request target(label).");
 
         String owner = Context.getCaller().toString();
-        int contentNonce = 0;
+        BigInteger contentNonce = BigInteger.ZERO;
         if (owner_did != null) {
             DidMessage didMessage = getDidMessage(owner_did, owner_sign);
             owner = didMessage.did;
