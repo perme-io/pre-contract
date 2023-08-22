@@ -171,25 +171,34 @@ public class PdsPolicyTest extends TestBase {
 
     @Test
     void preventUpdateLabelBySameSign() {
-        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE_A", BigInteger.ZERO);
-        pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_TO_UPDATE_A", "TEST_LABEL_A", sign_1.message, sign_1.signature, owners_did[0], "", "");
+        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL___A___", BigInteger.ZERO);
+        pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL___A___", "TEST_LABEL_A", sign_1.message, sign_1.signature, owners_did[0], "", "");
 
-        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE_B", BigInteger.ZERO);
-        pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_TO_UPDATE_B", "TEST_LABEL_B", sign_2.message, sign_2.signature, owners_did[0], "", "");
+        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL___B___", BigInteger.ZERO);
+        pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL___B___", "TEST_LABEL_B", sign_2.message, sign_2.signature, owners_did[0], "", "");
 
-        DidSignature sign_3 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE_A", BigInteger.ONE);
-        pdsPolicyScore.invoke(owners[0], "update_label","TEST_LABEL_TO_UPDATE_A", sign_3.message, sign_3.signature, "TEST_LABEL_UPDATED", null, null, null);
-        verify(pdsPolicySpy).PDSEvent(EventType.UpdateLabel.name(), "TEST_LABEL_TO_UPDATE_A", owners_did[0], BigInteger.ONE);
+        DidSignature sign_3 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL___A___", BigInteger.ONE);
+        pdsPolicyScore.invoke(owners[0], "update_label","TEST_LABEL___A___", sign_3.message, sign_3.signature, "UPDATE___1___", null, null, null);
+        var label = (Map<String, Object>) pdsPolicyScore.call("get_label", "TEST_LABEL___A___");
+        assertEquals("TEST_LABEL___A___", label.get("label_id"));
+        assertEquals("UPDATE___1___", label.get("name"));
+        assertEquals(BigInteger.ONE, label.get("nonce"));
 
         // need new signature with next nonce.
-        DidSignature sign_4 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE_A", BigInteger.valueOf(2));
-        pdsPolicyScore.invoke(owners[0], "update_label","TEST_LABEL_TO_UPDATE_A", sign_4.message, sign_4.signature, "TEST_LABEL_UPDATED", null, null, null);
-        verify(pdsPolicySpy).PDSEvent(EventType.UpdateLabel.name(), "TEST_LABEL_TO_UPDATE_A", owners_did[0], BigInteger.ONE);
+        DidSignature sign_4 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL___A___", BigInteger.valueOf(2));
+        pdsPolicyScore.invoke(owners[0], "update_label","TEST_LABEL___A___", sign_4.message, sign_4.signature, "UPDATE___2___", null, null, null);
+        label = (Map<String, Object>) pdsPolicyScore.call("get_label", "TEST_LABEL___A___");
+        assertEquals("TEST_LABEL___A___", label.get("label_id"));
+        assertEquals("UPDATE___2___", label.get("name"));
+        assertEquals(BigInteger.valueOf(2), label.get("nonce"));
 
         // need new signature for another label.
-        DidSignature sign_5 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE_B", BigInteger.ONE);
-        pdsPolicyScore.invoke(owners[0], "update_label","TEST_LABEL_TO_UPDATE_B", sign_5.message, sign_5.signature, "TEST_LABEL_UPDATED", null, null, null);
-        verify(pdsPolicySpy).PDSEvent(EventType.UpdateLabel.name(), "TEST_LABEL_TO_UPDATE_B", owners_did[0], BigInteger.ONE);
+        DidSignature sign_5 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL___B___", BigInteger.ONE);
+        pdsPolicyScore.invoke(owners[0], "update_label","TEST_LABEL___B___", sign_5.message, sign_5.signature, "UPDATE___1___", null, null, null);
+        label = (Map<String, Object>) pdsPolicyScore.call("get_label", "TEST_LABEL___B___");
+        assertEquals("TEST_LABEL___B___", label.get("label_id"));
+        assertEquals("UPDATE___1___", label.get("name"));
+        assertEquals(BigInteger.ONE, label.get("nonce"));
     }
 
     @Test

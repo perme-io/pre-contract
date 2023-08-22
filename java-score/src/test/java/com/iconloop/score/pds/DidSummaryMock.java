@@ -55,11 +55,6 @@ public class DidSummaryMock {
         return didInfo.getPublicKey(kid);
     }
 
-    @Payable
-    public void fallback() {
-        // just receive incoming funds
-    }
-
     /*
      * Events
      */
