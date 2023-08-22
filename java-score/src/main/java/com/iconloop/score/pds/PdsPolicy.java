@@ -207,7 +207,9 @@ public class PdsPolicy {
         Context.require(!policy_id.isEmpty(), "Blank key is not allowed.");
         Context.require(this.policyInfos.getOrDefault(policy_id, "").isEmpty(), "It has already been added.");
 
+        Context.require(!this.labelInfos.getOrDefault(label_id, "").isEmpty(), "Invalid request target.");
         LabelInfo labelInfo = LabelInfo.fromString(this.labelInfos.get(label_id));
+
         String owner = Context.getCaller().toString();
         if (owner_did != null) {
             Context.require(verifySign(owner_did, owner_sign), "Invalid did signature.");
