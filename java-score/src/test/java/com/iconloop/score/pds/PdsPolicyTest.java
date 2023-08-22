@@ -72,7 +72,7 @@ public class PdsPolicyTest extends TestBase {
 
         // Add public key to DID summary Contract
         for (int i = 0; i < owners.length; i++) {
-            DidSignature owners_sign = makeSignature(owners_did[i], owners_keyPair[i], "publicKey", "target", 0);
+            DidSignature owners_sign = makeSignature(owners_did[i], owners_keyPair[i], "publicKey", "target", BigInteger.ZERO);
             didSummaryScore.invoke(owners[0], "addPublicKey", owners_sign.message, "publicKey", owners_sign.signature);
         }
     }
@@ -91,8 +91,8 @@ public class PdsPolicyTest extends TestBase {
 //        return new DidSignature2(message, signature);
 //    }
 
-    private DidSignature makeSignature(String did, ECKeyPair keyPair, String kid, String target, int nonce) {
-        String message = did + "#" + kid + "#" + target + "#" + nonce;
+    private DidSignature makeSignature(String did, ECKeyPair keyPair, String kid, String target, BigInteger nonce) {
+        String message = did + "#" + kid + "#" + target + "#" + nonce.toString(10);
         byte[] msgHash = Hash.sha3(message.getBytes());
         byte[] signMsg = Hash.sha3(msgHash);
 
@@ -105,9 +105,9 @@ public class PdsPolicyTest extends TestBase {
 
     @Test
     void makeSignature() {
-        DidSignature sign = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "target", 0);
-        DidSignature sign2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey2", "target2", 0);
-        DidSignature sign3 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey3", "target3", 0);
+        DidSignature sign = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "target", BigInteger.ZERO);
+        DidSignature sign2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey2", "target2", BigInteger.ZERO);
+        DidSignature sign3 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey3", "target3", BigInteger.ZERO);
 
         didSummaryScore.invoke(owners[0], "addPublicKey", sign.message, "publicKey", sign.signature);
         didSummaryScore.invoke(owners[0], "addPublicKey", sign2.message, "publicKey2", sign2.signature);
@@ -123,30 +123,30 @@ public class PdsPolicyTest extends TestBase {
     @Test
     void addLabel() {
         pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_A000", "TEST_LABEL_A", null, null, owners[0].getAddress().toString(), "", "");
-        verify(pdsPolicySpy).PDSEvent(EventType.AddLabel.name(), "TEST_LABEL_A000", owners[0].getAddress().toString(), 0);
+        verify(pdsPolicySpy).PDSEvent(EventType.AddLabel.name(), "TEST_LABEL_A000", owners[0].getAddress().toString(), BigInteger.ZERO);
     }
 
     @Test
     void addLabelByDid() {
         System.out.println("addLabelByDid");
-        DidSignature sign = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_A000", 0);
+        DidSignature sign = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_A000", BigInteger.ZERO);
         pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_A000", "TEST_LABEL_A", sign.message, sign.signature, owners_did[0], "", "");
-        verify(pdsPolicySpy).PDSEvent(EventType.AddLabel.name(), "TEST_LABEL_A000", owners_did[0], 0);
+        verify(pdsPolicySpy).PDSEvent(EventType.AddLabel.name(), "TEST_LABEL_A000", owners_did[0], BigInteger.ZERO);
     }
 
     @Test
     void preventUpdateLabelByOthers() {
-        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE", 0);
+        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE", BigInteger.ZERO);
         pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_TO_UPDATE", "TEST_LABEL_A", sign_1.message, sign_1.signature, owners_did[0], "", "");
 
-        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[1], "publicKey", "TEST_LABEL_TO_UPDATE", 0);
+        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[1], "publicKey", "TEST_LABEL_TO_UPDATE", BigInteger.ZERO);
         assertThrows(UserRevertedException.class, () ->
                 pdsPolicyScore.invoke(owners[0], "update_label","TEST_LABEL_TO_UPDATE", sign_1.message, sign_2.signature, "TEST_LABEL_UPDATED", null, null, null));
     }
 
     @Test
     void removeLabel() {
-        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_REMOVE", 0);
+        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_REMOVE", BigInteger.ZERO);
         pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_TO_REMOVE", "TEST_LABEL_A", sign_1.message, sign_1.signature, owners_did[0], "", "");
 
         // prev signature is not valid.
@@ -154,57 +154,57 @@ public class PdsPolicyTest extends TestBase {
                 pdsPolicyScore.invoke(owners[0], "remove_label","TEST_LABEL_TO_REMOVE", sign_1.message, sign_1.signature));
 
         // need new signature to remove.
-        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_REMOVE", 1);
+        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_REMOVE", BigInteger.ONE);
         pdsPolicyScore.invoke(owners[0], "remove_label","TEST_LABEL_TO_REMOVE", sign_2.message, sign_2.signature);
-        verify(pdsPolicySpy).PDSEvent(EventType.RemoveLabel.name(), "TEST_LABEL_TO_REMOVE", owners_did[0], 0);
+        verify(pdsPolicySpy).PDSEvent(EventType.RemoveLabel.name(), "TEST_LABEL_TO_REMOVE", owners_did[0], BigInteger.ZERO);
     }
 
     @Test
     void updateLabel() {
-        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE", 0);
+        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE", BigInteger.ZERO);
         pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_TO_UPDATE", "TEST_LABEL_A", sign_1.message, sign_1.signature, owners_did[0], "", "");
 
-        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE", 1);
+        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE", BigInteger.ONE);
         pdsPolicyScore.invoke(owners[0], "update_label","TEST_LABEL_TO_UPDATE", sign_2.message, sign_2.signature, "TEST_LABEL_UPDATED", null, null, null);
-        verify(pdsPolicySpy).PDSEvent(EventType.UpdateLabel.name(), "TEST_LABEL_TO_UPDATE", owners_did[0], 1);
+        verify(pdsPolicySpy).PDSEvent(EventType.UpdateLabel.name(), "TEST_LABEL_TO_UPDATE", owners_did[0], BigInteger.ONE);
     }
 
     @Test
     void preventUpdateLabelBySameSign() {
-        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE_A", 0);
+        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE_A", BigInteger.ZERO);
         pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_TO_UPDATE_A", "TEST_LABEL_A", sign_1.message, sign_1.signature, owners_did[0], "", "");
 
-        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE_B", 0);
+        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE_B", BigInteger.ZERO);
         pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_TO_UPDATE_B", "TEST_LABEL_B", sign_2.message, sign_2.signature, owners_did[0], "", "");
 
-        DidSignature sign_3 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE_A", 1);
+        DidSignature sign_3 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE_A", BigInteger.ONE);
         pdsPolicyScore.invoke(owners[0], "update_label","TEST_LABEL_TO_UPDATE_A", sign_3.message, sign_3.signature, "TEST_LABEL_UPDATED", null, null, null);
-        verify(pdsPolicySpy).PDSEvent(EventType.UpdateLabel.name(), "TEST_LABEL_TO_UPDATE_A", owners_did[0], 1);
+        verify(pdsPolicySpy).PDSEvent(EventType.UpdateLabel.name(), "TEST_LABEL_TO_UPDATE_A", owners_did[0], BigInteger.ONE);
 
         // need new signature with next nonce.
-        DidSignature sign_4 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE_A", 2);
+        DidSignature sign_4 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE_A", BigInteger.valueOf(2));
         pdsPolicyScore.invoke(owners[0], "update_label","TEST_LABEL_TO_UPDATE_A", sign_4.message, sign_4.signature, "TEST_LABEL_UPDATED", null, null, null);
-        verify(pdsPolicySpy).PDSEvent(EventType.UpdateLabel.name(), "TEST_LABEL_TO_UPDATE_A", owners_did[0], 1);
+        verify(pdsPolicySpy).PDSEvent(EventType.UpdateLabel.name(), "TEST_LABEL_TO_UPDATE_A", owners_did[0], BigInteger.ONE);
 
         // need new signature for another label.
-        DidSignature sign_5 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE_B", 1);
+        DidSignature sign_5 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE_B", BigInteger.ONE);
         pdsPolicyScore.invoke(owners[0], "update_label","TEST_LABEL_TO_UPDATE_B", sign_5.message, sign_5.signature, "TEST_LABEL_UPDATED", null, null, null);
-        verify(pdsPolicySpy).PDSEvent(EventType.UpdateLabel.name(), "TEST_LABEL_TO_UPDATE_B", owners_did[0], 1);
+        verify(pdsPolicySpy).PDSEvent(EventType.UpdateLabel.name(), "TEST_LABEL_TO_UPDATE_B", owners_did[0], BigInteger.ONE);
     }
 
     @Test
     void updateData() {
-        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE", 0);
+        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE", BigInteger.ZERO);
         pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_TO_UPDATE", "TEST_LABEL_A", sign_1.message, sign_1.signature, owners_did[0], "", "");
 
-        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE", 1);
+        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_UPDATE", BigInteger.ONE);
         pdsPolicyScore.invoke(owners[0], "update_data","TEST_LABEL_TO_UPDATE", "TEST_DATA", sign_2.message, sign_2.signature, null);
-        verify(pdsPolicySpy).PDSEvent(EventType.UpdateData.name(), "TEST_LABEL_TO_UPDATE", owners_did[0], 1);
+        verify(pdsPolicySpy).PDSEvent(EventType.UpdateData.name(), "TEST_LABEL_TO_UPDATE", owners_did[0], BigInteger.ONE);
     }
 
     @Test
     void getLabel() {
-        DidSignature sign = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_GET", 0);
+        DidSignature sign = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_TO_GET", BigInteger.ZERO);
         pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_TO_GET", "TEST_LABEL_A", sign.message, sign.signature, owners_did[0], "", "");
 
         var label = (Map<String, Object>) pdsPolicyScore.call("get_label", "TEST_LABEL_TO_GET");
@@ -216,38 +216,38 @@ public class PdsPolicyTest extends TestBase {
         pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_FOR_POLICY", "TEST_LABEL_A", null, null, owners[0].getAddress().toString(), "", "");
 
         pdsPolicyScore.invoke(owners[0], "add_policy","TEST_POLICY_A000", "TEST_LABEL_FOR_POLICY", "TEST_POLICY_A", owners[0].getAddress().toString(), 3, 5,  null, null, null, null);
-        verify(pdsPolicySpy).PDSEvent(EventType.AddPolicy.name(), "TEST_POLICY_A000", owners[0].getAddress().toString(), 0);
+        verify(pdsPolicySpy).PDSEvent(EventType.AddPolicy.name(), "TEST_POLICY_A000", owners[0].getAddress().toString(), BigInteger.ZERO);
     }
 
     @Test
     void addPolicyByDid() {
-        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_FOR_POLICY", 0);
+        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_FOR_POLICY", BigInteger.ZERO);
         pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_FOR_POLICY", "TEST_LABEL_A", sign_1.message, sign_1.signature, owners_did[0], "", "");
 
-        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_POLICY_A000", 0);
+        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_POLICY_A000", BigInteger.ZERO);
         pdsPolicyScore.invoke(owners[0], "add_policy","TEST_POLICY_A000", "TEST_LABEL_FOR_POLICY", "TEST_POLICY_A", owners_did[0], 3, 5, sign_2.message, sign_2.signature, null, null);
-        verify(pdsPolicySpy).PDSEvent(EventType.AddPolicy.name(), "TEST_POLICY_A000", owners_did[0], 0);
+        verify(pdsPolicySpy).PDSEvent(EventType.AddPolicy.name(), "TEST_POLICY_A000", owners_did[0], BigInteger.ZERO);
     }
 
     @Test
     void removePolicy() {
-        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_FOR_POLICY", 0);
+        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_FOR_POLICY", BigInteger.ZERO);
         pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_FOR_POLICY", "TEST_LABEL_A", sign_1.message, sign_1.signature, owners_did[0], "", "");
 
-        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_POLICY_TO_REMOVE", 0);
+        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_POLICY_TO_REMOVE", BigInteger.ZERO);
         pdsPolicyScore.invoke(owners[0], "add_policy","TEST_POLICY_TO_REMOVE", "TEST_LABEL_FOR_POLICY", "TEST_POLICY_A", owners_did[0], 3, 5, sign_2.message, sign_2.signature, null, null);
 
-        DidSignature sign_3 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_POLICY_TO_REMOVE", 1);
+        DidSignature sign_3 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_POLICY_TO_REMOVE", BigInteger.ONE);
         pdsPolicyScore.invoke(owners[0], "remove_policy","TEST_POLICY_TO_REMOVE", sign_3.message, sign_3.signature);
-        verify(pdsPolicySpy).PDSEvent(EventType.RemovePolicy.name(), "TEST_POLICY_TO_REMOVE", owners_did[0], 0);
+        verify(pdsPolicySpy).PDSEvent(EventType.RemovePolicy.name(), "TEST_POLICY_TO_REMOVE", owners_did[0], BigInteger.ZERO);
     }
 
     @Test
     void checkPolicy() {
-        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_FOR_POLICY", 0);
+        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_FOR_POLICY", BigInteger.ZERO);
         pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_FOR_POLICY", "TEST_LABEL_A", sign_1.message, sign_1.signature, owners_did[0], "", "");
 
-        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_POLICY_A000", 0);
+        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_POLICY_A000", BigInteger.ZERO);
         pdsPolicyScore.invoke(owners[0], "add_policy","TEST_POLICY_A000", "TEST_LABEL_FOR_POLICY", "TEST_POLICY_A", owners_did[0], 3, 5, sign_2.message, sign_2.signature, null, null);
 
         var policy_checked = (Map<String, Object>) pdsPolicyScore.call("check_policy","TEST_POLICY_A000", owners_did[0], owners_did[0]);
@@ -265,10 +265,10 @@ public class PdsPolicyTest extends TestBase {
 
     @Test
     void getPolicy() {
-        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_FOR_POLICY", 0);
+        DidSignature sign_1 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_LABEL_FOR_POLICY", BigInteger.ZERO);
         pdsPolicyScore.invoke(owners[0], "add_label","TEST_LABEL_FOR_POLICY", "TEST_LABEL_A", sign_1.message, sign_1.signature, owners_did[0], "", "");
 
-        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_POLICY_A000", 0);
+        DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_POLICY_A000", BigInteger.ZERO);
         pdsPolicyScore.invoke(owners[0], "add_policy","TEST_POLICY_A000", "TEST_LABEL_FOR_POLICY", "TEST_POLICY_A", owners_did[0], 3, 5, sign_2.message, sign_2.signature, null, null);
 
         var policy = (Map<String, Object>) pdsPolicyScore.call("get_policy","TEST_POLICY_A000");
@@ -278,7 +278,7 @@ public class PdsPolicyTest extends TestBase {
     @Test
     void addNode() {
         pdsPolicyScore.invoke(owners[0], "add_node","TEST_NODE_A000", "111.222.333.1", null, null, null);
-        verify(pdsPolicySpy).PDSEvent(EventType.AddNode.name(), "TEST_NODE_A000", "111.222.333.1", 0);
+        verify(pdsPolicySpy).PDSEvent(EventType.AddNode.name(), "TEST_NODE_A000", "111.222.333.1", BigInteger.ZERO);
     }
 
     @Test
@@ -286,7 +286,7 @@ public class PdsPolicyTest extends TestBase {
         pdsPolicyScore.invoke(owners[0], "add_node","TEST_NODE_TO_REMOVE", "111.222.333.1", null, null, null);
 
         pdsPolicyScore.invoke(owners[0], "remove_node","TEST_NODE_TO_REMOVE");
-        verify(pdsPolicySpy).PDSEvent(EventType.RemoveNode.name(), "TEST_NODE_TO_REMOVE", "111.222.333.1", 0);
+        verify(pdsPolicySpy).PDSEvent(EventType.RemoveNode.name(), "TEST_NODE_TO_REMOVE", "111.222.333.1", BigInteger.ZERO);
     }
 
     @Test
@@ -294,7 +294,7 @@ public class PdsPolicyTest extends TestBase {
         pdsPolicyScore.invoke(owners[0], "add_node","TEST_NODE_TO_UPDATE", "111.222.333.1", null, null, null);
 
         pdsPolicyScore.invoke(owners[0], "update_node","TEST_NODE_TO_UPDATE", "111.222.333.2", null, null, null);
-        verify(pdsPolicySpy).PDSEvent(EventType.UpdateNode.name(), "TEST_NODE_TO_UPDATE", "111.222.333.2", 0);
+        verify(pdsPolicySpy).PDSEvent(EventType.UpdateNode.name(), "TEST_NODE_TO_UPDATE", "111.222.333.2", BigInteger.ZERO);
     }
 
     @Test

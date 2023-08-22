@@ -385,7 +385,7 @@ public class PdsPolicy {
 
         removeNode(peer_id);
         this.peers.add(peer_id);
-        PDSEvent(EventType.AddNode.name(), peer_id, nodeInfo.getEndpoint(), 0);
+        PDSEvent(EventType.AddNode.name(), peer_id, nodeInfo.getEndpoint(), BigInteger.ZERO);
     }
 
     @External()
@@ -399,7 +399,7 @@ public class PdsPolicy {
 
         this.nodeInfos.set(peer_id, null);
         removeNode(peer_id);
-        PDSEvent(EventType.RemoveNode.name(), peer_id, nodeInfo.getEndpoint(), 0);
+        PDSEvent(EventType.RemoveNode.name(), peer_id, nodeInfo.getEndpoint(), BigInteger.ZERO);
     }
 
     @External()
@@ -431,7 +431,7 @@ public class PdsPolicy {
 
         removeNode(peer_id);
         this.peers.add(peer_id);
-        PDSEvent(EventType.UpdateNode.name(), peer_id, nodeInfo.getEndpoint(), 0);
+        PDSEvent(EventType.UpdateNode.name(), peer_id, nodeInfo.getEndpoint(), BigInteger.ZERO);
     }
 
     private void removeNode(String peer_id) {
@@ -529,5 +529,5 @@ public class PdsPolicy {
      * Events
      */
     @EventLog
-    protected void PDSEvent(String event, String value1, String value2, int nonce) {}
+    protected void PDSEvent(String event, String value1, String value2, BigInteger nonce) {}
 }

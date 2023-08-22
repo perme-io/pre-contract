@@ -64,8 +64,8 @@ public class PolicyInfo {
         return expireAt;
     }
 
-    public int getNonce() {
-        return this.nonce.intValue();
+    public BigInteger getNonce() {
+        return this.nonce;
     }
 
     public boolean checkNonce(BigInteger nonce) {
