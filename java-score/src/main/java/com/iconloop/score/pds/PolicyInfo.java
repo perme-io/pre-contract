@@ -18,6 +18,7 @@ public class PolicyInfo {
     private final String[] proxies;
     private final String created;
     private final String expireAt;
+    private BigInteger nonce;
 
     public PolicyInfo(String policyId,
                       String labelId,
@@ -28,7 +29,8 @@ public class PolicyInfo {
                       BigInteger proxy_number,
                       String[] proxies,
                       String created,
-                      String expire_at) {
+                      String expire_at,
+                      BigInteger nonce) {
         this.policyId = policyId;
         this.labelId = labelId;
         this.name = name;
@@ -39,6 +41,7 @@ public class PolicyInfo {
         this.proxies = proxies;
         this.created = created;
         this.expireAt = expire_at;
+        this.nonce = nonce;
     }
 
     public boolean checkOwner(String owner) {
@@ -61,9 +64,18 @@ public class PolicyInfo {
         return expireAt;
     }
 
+    public BigInteger getNonce() {
+        return this.nonce;
+    }
+
+    public boolean checkNonce(BigInteger nonce) {
+        // nonce should be increased by 1
+        return this.nonce.equals(nonce.subtract(BigInteger.ONE));
+    }
+
     public static void writeObject(ObjectWriter w, PolicyInfo t) {
         String proxiesJsonString = Helper.StringListToJsonString(t.proxies);
-        w.beginList(10);
+        w.beginList(11);
         w.writeNullable(t.policyId);
         w.writeNullable(t.labelId);
         w.writeNullable(t.name);
@@ -74,6 +86,7 @@ public class PolicyInfo {
         w.writeNullable(proxiesJsonString);
         w.writeNullable(t.created);
         w.writeNullable(t.expireAt);
+        w.write(t.nonce);
         w.end();
     }
 
@@ -89,7 +102,8 @@ public class PolicyInfo {
                 r.readNullable(BigInteger.class),
                 Helper.JsonStringToStringList("proxies", r.readNullable(String.class)),
                 r.readNullable(String.class),
-                r.readNullable(String.class));
+                r.readNullable(String.class),
+                r.readBigInteger());
         r.end();
         return t;
     }
@@ -105,7 +119,8 @@ public class PolicyInfo {
                 Map.entry("proxy_number", this.proxyNumber),
                 Map.entry("proxies", this.proxies),
                 Map.entry("created", this.created),
-                Map.entry("expireAt", this.expireAt)
+                Map.entry("expireAt", this.expireAt),
+                Map.entry("nonce", this.nonce)
         );
     }
 }

@@ -33,11 +33,23 @@ public class PdsPolicy {
     private final VarDB<BigInteger> labelCount = Context.newVarDB("labelCount", BigInteger.class);
     private final VarDB<BigInteger> policyCount = Context.newVarDB("policyCount", BigInteger.class);
     private final VarDB<BigInteger> minStakeForServe = Context.newVarDB("minStakeForServe", BigInteger.class);
+    private final VarDB<Address> didSummaryScore = Context.newVarDB("didSummaryScore", Address.class);
 
     public PdsPolicy() {
         this.labelInfos = Context.newDictDB("labelInfos", LabelInfo.class);
         this.nodeInfos = Context.newDictDB("nodeInfos", NodeInfo.class);
         this.policyInfos = Context.newDictDB("policyInfos", PolicyInfo.class);
+    }
+
+    @External()
+    public void set_did_summary_score(Address did_summary_score) {
+        Context.require(Context.getCaller().equals(Context.getOwner()), "Only owner can call this method.");
+        this.didSummaryScore.set(did_summary_score);
+    }
+
+    @External(readonly=true)
+    public Address get_did_summary_score() {
+        return this.didSummaryScore.getOrDefault(null);
     }
 
     @External()
@@ -72,18 +84,21 @@ public class PdsPolicy {
 
         BigInteger blockTimeStamp = new BigInteger(String.valueOf(Context.getBlockTimestamp()));
         String owner = Context.getCaller().toString();
+        BigInteger contentNonce = BigInteger.ZERO;
         if (owner_did != null) {
-            Context.require(verifySign(owner_did, owner_sign), "Invalid did signature.");
-            owner = owner_did;
+            DidMessage didMessage = getDidMessage(owner_did, owner_sign);
+            owner = didMessage.did;
+            contentNonce = didMessage.nonce;
+            Context.require(label_id.equals(didMessage.target), "Invalid Content(LabelInfo) target.");
         }
 
         String producerID = (producer == null) ? owner : producer;
         String producerExpireAt =  (producer_expire_at == null) ? String.valueOf(blockTimeStamp.add(ONE_YEAR)) : producer_expire_at;
         String expireAt =  (expire_at == null) ? String.valueOf(blockTimeStamp.add(ONE_YEAR)) : expire_at;
 
-        LabelInfo labelInfo = new LabelInfo(label_id, name, owner, producerID, producerExpireAt, "", "", "", null, String.valueOf(Context.getBlockTimestamp()), expireAt);
+        LabelInfo labelInfo = new LabelInfo(label_id, name, owner, producerID, producerExpireAt, "", "", "", null, String.valueOf(Context.getBlockTimestamp()), expireAt, contentNonce);
         this.labelInfos.set(label_id, labelInfo);
-        PDSEvent(EventType.AddLabel.name(), label_id, producerID);
+        PDSEvent(EventType.AddLabel.name(), label_id, producerID, labelInfo.getNonce());
 
         BigInteger total = this.labelCount.getOrDefault(BigInteger.ZERO);
         this.labelCount.set(total.add(BigInteger.ONE));
@@ -100,8 +115,10 @@ public class PdsPolicy {
         // Verify owner
         String owner = Context.getCaller().toString();
         if (owner_did != null) {
-            Context.require(verifySign(owner_did, owner_sign), "Invalid did signature.");
-            owner = owner_did;
+            DidMessage didMessage = getDidMessage(owner_did, owner_sign);
+            owner = didMessage.did;
+            Context.require(labelInfo.checkNonce(didMessage.nonce), "Invalid Content(LabelInfo) nonce.");
+            Context.require(label_id.equals(didMessage.target), "Invalid Content(LabelInfo) target.");
         }
         if (!labelInfo.checkOwner(owner)) {
             Context.revert(101, "You do not have permission.");
@@ -112,13 +129,13 @@ public class PdsPolicy {
         for (String policyId : policyList) {
             PolicyInfo policyInfo = this.policyInfos.get(policyId);
             if (policyInfo != null) {
-                PDSEvent(EventType.RemovePolicy.name(), policyId, policyInfo.getConsumer());
+                PDSEvent(EventType.RemovePolicy.name(), policyId, policyInfo.getConsumer(), policyInfo.getNonce());
                 this.policyInfos.set(policyId, null);
             }
         }
 
         this.labelInfos.set(label_id, null);
-        PDSEvent(EventType.RemoveLabel.name(), label_id, labelInfo.getProducer());
+        PDSEvent(EventType.RemoveLabel.name(), label_id, labelInfo.getProducer(), labelInfo.getNonce());
 
         BigInteger total = this.labelCount.getOrDefault(BigInteger.ZERO);
         this.labelCount.set(total.subtract(BigInteger.ONE));
@@ -139,8 +156,10 @@ public class PdsPolicy {
         // Verify owner
         String owner = Context.getCaller().toString();
         if (owner_did != null) {
-            Context.require(verifySign(owner_did, owner_sign), "Invalid did signature.");
-            owner = owner_did;
+            DidMessage didMessage = getDidMessage(owner_did, owner_sign);
+            owner = didMessage.did;
+            Context.require(labelInfo.checkNonce(didMessage.nonce), "Invalid Content(LabelInfo) nonce.");
+            Context.require(label_id.equals(didMessage.target), "Invalid Content(LabelInfo) target.");
         }
 
         if (!labelInfo.checkOwner(owner)) {
@@ -157,7 +176,7 @@ public class PdsPolicy {
 
         labelInfo.update(name, null, producerAddress, producerExpireAt, null, null, null, null, "", expire_at);
         this.labelInfos.set(label_id, labelInfo);
-        PDSEvent(EventType.UpdateLabel.name(), label_id, labelInfo.getProducer());
+        PDSEvent(EventType.UpdateLabel.name(), label_id, labelInfo.getProducer(), labelInfo.getNonce());
     }
 
     @External()
@@ -172,8 +191,10 @@ public class PdsPolicy {
         // Verify producer
         String producer = Context.getCaller().toString();
         if (producer_did != null) {
-            Context.require(verifySign(producer_did, producer_sign), "Invalid did signature.");
-            producer = producer_did;
+            DidMessage didMessage = getDidMessage(producer_did, producer_sign);
+            producer = didMessage.did;
+            Context.require(labelInfo.checkNonce(didMessage.nonce), "Invalid Content(LabelInfo) nonce.");
+            Context.require(label_id.equals(didMessage.target), "Invalid Content(LabelInfo) target.");
         }
         if (!labelInfo.getProducer().equals(producer)) {
             Context.revert(101, "You do not have permission.");
@@ -181,7 +202,7 @@ public class PdsPolicy {
 
         labelInfo.update(null, null, null, null, capsule, data, String.valueOf(Context.getBlockTimestamp()), null, "", null);
         this.labelInfos.set(label_id, labelInfo);
-        PDSEvent(EventType.UpdateData.name(), label_id, labelInfo.getProducer());
+        PDSEvent(EventType.UpdateData.name(), label_id, labelInfo.getProducer(), labelInfo.getNonce());
     }
 
     @External(readonly=true)
@@ -208,9 +229,12 @@ public class PdsPolicy {
         Context.require(labelInfo != null, "Invalid request target(label).");
 
         String owner = Context.getCaller().toString();
+        BigInteger contentNonce = BigInteger.ZERO;
         if (owner_did != null) {
-            Context.require(verifySign(owner_did, owner_sign), "Invalid did signature.");
-            owner = owner_did;
+            DidMessage didMessage = getDidMessage(owner_did, owner_sign);
+            owner = didMessage.did;
+            contentNonce = didMessage.nonce;
+            Context.require(policy_id.equals(didMessage.target), "Invalid Content(PolicyInfo) target.");
         }
         if (!labelInfo.checkOwner(owner)) {
             Context.revert(101, "You do not have permission.");
@@ -226,11 +250,11 @@ public class PdsPolicy {
         String expireAt =  (expire_at == null) ? String.valueOf(blockTimeStamp.add(ONE_YEAR)) : expire_at;
 
         PolicyInfo policyInfo = new PolicyInfo(
-                policy_id, label_id, name, owner, consumer, threshold, proxy_number, proxies, String.valueOf(Context.getBlockTimestamp()), expireAt
+                policy_id, label_id, name, owner, consumer, threshold, proxy_number, proxies, String.valueOf(Context.getBlockTimestamp()), expireAt, contentNonce
         );
         this.policyInfos.set(policy_id, policyInfo);
         this.labelInfos.set(label_id, labelInfo);
-        PDSEvent(EventType.AddPolicy.name(), policy_id, consumer);
+        PDSEvent(EventType.AddPolicy.name(), policy_id, consumer, policyInfo.getNonce());
 
         BigInteger total = this.policyCount.getOrDefault(BigInteger.ZERO);
         this.policyCount.set(total.add(BigInteger.ONE));
@@ -244,8 +268,10 @@ public class PdsPolicy {
         // Verify policy owner
         String owner = Context.getCaller().toString();
         if (owner_did != null) {
-            Context.require(verifySign(owner_did, owner_sign), "Invalid did signature.");
-            owner = owner_did;
+            DidMessage didMessage = getDidMessage(owner_did, owner_sign);
+            owner = didMessage.did;
+            Context.require(policyInfo.checkNonce(didMessage.nonce), "Invalid Content(PolicyInfo) nonce.");
+            Context.require(policy_id.equals(didMessage.target), "Invalid Content(PolicyInfo) target.");
         }
         if (!policyInfo.checkOwner(owner)) {
             Context.revert(101, "You do not have permission.");
@@ -271,7 +297,7 @@ public class PdsPolicy {
             labelInfo.setPolicies(newPolicyList);
 
             this.labelInfos.set(policyInfo.getLabelId(), labelInfo);
-            PDSEvent(EventType.RemovePolicy.name(), policy_id, policyInfo.getConsumer());
+            PDSEvent(EventType.RemovePolicy.name(), policy_id, policyInfo.getConsumer(), policyInfo.getNonce());
         }
 
         this.policyInfos.set(policy_id, null);
@@ -359,7 +385,7 @@ public class PdsPolicy {
 
         removeNode(peer_id);
         this.peers.add(peer_id);
-        PDSEvent(EventType.AddNode.name(), peer_id, nodeInfo.getEndpoint());
+        PDSEvent(EventType.AddNode.name(), peer_id, nodeInfo.getEndpoint(), BigInteger.ZERO);
     }
 
     @External()
@@ -373,7 +399,7 @@ public class PdsPolicy {
 
         this.nodeInfos.set(peer_id, null);
         removeNode(peer_id);
-        PDSEvent(EventType.RemoveNode.name(), peer_id, nodeInfo.getEndpoint());
+        PDSEvent(EventType.RemoveNode.name(), peer_id, nodeInfo.getEndpoint(), BigInteger.ZERO);
     }
 
     @External()
@@ -405,7 +431,7 @@ public class PdsPolicy {
 
         removeNode(peer_id);
         this.peers.add(peer_id);
-        PDSEvent(EventType.UpdateNode.name(), peer_id, nodeInfo.getEndpoint());
+        PDSEvent(EventType.UpdateNode.name(), peer_id, nodeInfo.getEndpoint(), BigInteger.ZERO);
     }
 
     private void removeNode(String peer_id) {
@@ -472,9 +498,26 @@ public class PdsPolicy {
 
     // Verify secp256k1 recoverable signature
     private boolean verifySign(String msg, byte[] sign) {
-        byte[] msgHash = Context.hash("sha3-256", msg.getBytes());
-        byte[] publicKey = Context.recoverKey("ecdsa-secp256k1", msgHash, sign, false);
-        return Context.verifySignature("ecdsa-secp256k1", msgHash, sign, publicKey);
+        if (this.didSummaryScore.getOrDefault(null) == null) {
+            Context.revert(102, "No External SCORE to verify DID.");
+        }
+
+        DidMessage didMessage = Helper.DidMessageParser(msg);
+        String publicKey = (String) Context.call(this.didSummaryScore.get(), "getPublicKey", didMessage.did, didMessage.kid);
+
+        byte[] msgHash = Context.hash("keccak-256", msg.getBytes());
+        byte[] recoveredKeyBytes = Context.recoverKey("ecdsa-secp256k1", msgHash, sign, false);
+        String recoveredKey = new BigInteger(recoveredKeyBytes).toString(16);
+
+//        System.out.println("publicKey(verifySign): " + publicKey);
+//        System.out.println("recoveredKey(verifySign): " + recoveredKey);
+
+        return publicKey.equals(recoveredKey);
+    }
+
+    private DidMessage getDidMessage(String msg, byte[] sign) {
+        Context.require(verifySign(msg, sign), "Invalid did signature.");
+        return Helper.DidMessageParser(msg);
     }
 
     @Payable
@@ -486,5 +529,5 @@ public class PdsPolicy {
      * Events
      */
     @EventLog
-    protected void PDSEvent(String event, String value1, String value2) {}
+    protected void PDSEvent(String event, String value1, String value2, BigInteger nonce) {}
 }

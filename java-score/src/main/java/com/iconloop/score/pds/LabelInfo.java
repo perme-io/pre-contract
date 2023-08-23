@@ -19,6 +19,7 @@ public class LabelInfo {
     private String[] policies;
     private String created;
     private String expireAt;
+    private BigInteger nonce;
 
 
     public LabelInfo(String labelId,
@@ -31,7 +32,8 @@ public class LabelInfo {
                      String dataUpdated,
                      String[] policies,
                      String created,
-                     String expireAt) {
+                     String expireAt,
+                     BigInteger nonce) {
         this.labelId = labelId;
         this.name = name;
         this.owner = owner;
@@ -43,6 +45,7 @@ public class LabelInfo {
         this.policies = policies;
         this.created = created;
         this.expireAt = expireAt;
+        this.nonce = nonce;
     }
 
     public void update(String name,
@@ -65,6 +68,7 @@ public class LabelInfo {
         this.policies = (policies == null) ? this.policies : policies;
         this.created = (created == null) ? this.created : created;
         this.expireAt = (expireAt == null) ? this.expireAt : expireAt;
+        this.nonce = this.nonce.add(BigInteger.ONE);
     }
 
     public boolean checkOwner(String owner) {
@@ -87,9 +91,18 @@ public class LabelInfo {
         return (this.expireAt.isEmpty()) ? BigInteger.ZERO : new BigInteger(this.expireAt);
     }
 
+    public BigInteger getNonce() {
+        return this.nonce;
+    }
+
+    public boolean checkNonce(BigInteger nonce) {
+        // nonce should be increased by 1
+        return this.nonce.equals(nonce.subtract(BigInteger.ONE));
+    }
+
     public static void writeObject(ObjectWriter w, LabelInfo t) {
         String policiesJsonString = Helper.StringListToJsonString(t.policies);
-        w.beginList(11);
+        w.beginList(12);
         w.writeNullable(t.labelId);
         w.writeNullable(t.name);
         w.writeNullable(t.owner);
@@ -101,6 +114,7 @@ public class LabelInfo {
         w.writeNullable(policiesJsonString);
         w.writeNullable(t.created);
         w.writeNullable(t.expireAt);
+        w.write(t.nonce);
         w.end();
     }
 
@@ -117,7 +131,8 @@ public class LabelInfo {
                 r.readNullable(String.class),
                 Helper.JsonStringToStringList("policies", r.readNullable(String.class)),
                 r.readNullable(String.class),
-                r.readNullable(String.class));
+                r.readNullable(String.class),
+                r.readBigInteger());
         r.end();
         return t;
     }
@@ -134,7 +149,8 @@ public class LabelInfo {
                 Map.entry("data_updated", this.dataUpdated),
                 Map.entry("policies", this.policies),
                 Map.entry("created", this.created),
-                Map.entry("expire_at", this.expireAt)
+                Map.entry("expire_at", this.expireAt),
+                Map.entry("nonce", this.nonce)
         );
     }
 }
