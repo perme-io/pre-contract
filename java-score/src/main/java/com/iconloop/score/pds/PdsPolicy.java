@@ -209,7 +209,6 @@ public class PdsPolicy {
 
         Context.require(!this.labelInfos.getOrDefault(label_id, "").isEmpty(), "Invalid request target.");
         LabelInfo labelInfo = LabelInfo.fromString(this.labelInfos.get(label_id));
-
         String owner = Context.getCaller().toString();
         if (owner_did != null) {
             Context.require(verifySign(owner_did, owner_sign), "Invalid did signature.");
@@ -240,7 +239,7 @@ public class PdsPolicy {
     }
 
     @External()
-    public void remove_policy(String policy_id, String owner_did, byte[] owner_sign) {
+    public void remove_policy(String policy_id, @Optional String owner_did, @Optional byte[] owner_sign) {
         Context.require(!this.policyInfos.getOrDefault(policy_id, "").isEmpty(), "Invalid request target.");
 
         PolicyInfo policyInfo = PolicyInfo.fromString(this.policyInfos.get(policy_id));
@@ -313,8 +312,16 @@ public class PdsPolicy {
             }
         }
 
-        BigInteger labelExpireAt = new BigInteger(labelInfo.getString("expire_at"));
-        BigInteger policyExpireAt = new BigInteger(policyInfo.getString("expire_at"));
+        BigInteger labelExpireAt = BigInteger.ZERO;
+        if (!labelInfo.getString("expire_at").isEmpty()) {
+            labelExpireAt = new BigInteger(labelInfo.getString("expire_at"));
+        }
+
+        BigInteger policyExpireAt = BigInteger.ZERO;
+        if (!policyInfo.getString("expire_at").isEmpty()) {
+            policyExpireAt = new BigInteger(policyInfo.getString("expire_at"));
+        }
+
         String expireAt = "";
         if (labelExpireAt.compareTo(policyExpireAt) > 0) {
             expireAt = policyExpireAt.toString();
@@ -323,6 +330,9 @@ public class PdsPolicy {
         }
 
         return Map.ofEntries(
+                Map.entry("policy_id", policy_id),
+                Map.entry("label_id", labelId),
+                Map.entry("name", policyInfo.getString("name")),
                 Map.entry("checked", checked),
                 Map.entry("expire_at", expireAt)
         );
