@@ -287,28 +287,36 @@ public class PdsPolicy {
     public Map<String, Object> check_policy(String policy_id,
                                             @Optional String owner,
                                             @Optional String consumer) {
-        Context.require(!this.policyInfos.getOrDefault(policy_id, "").isEmpty(), "Invalid request target.");
         boolean checked = owner != null || consumer != null;
 
-        PolicyInfo policyInfo = PolicyInfo.fromString(this.policyInfos.get(policy_id));
-        String labelId = policyInfo.getString("label_id");
+        PolicyInfo policyInfo = null;
+        String labelId = policy_id;
+        if (!this.policyInfos.getOrDefault(policy_id, "").isEmpty()) {
+            policyInfo = PolicyInfo.fromString(this.policyInfos.get(policy_id));
+            labelId = policyInfo.getString("label_id");
+        }
 
         Context.require(!this.labelInfos.getOrDefault(labelId, "").isEmpty(), "Invalid request target.");
         LabelInfo labelInfo = LabelInfo.fromString(this.labelInfos.get(labelId));
 
-        if (owner != null) {
-            if (!policyInfo.getString("owner").equals(owner)) {
-                checked = false;
+        if (labelInfo.getString("owner").equals(consumer)) {
+            checked = true;
+        } else {
+            Context.require(!this.policyInfos.getOrDefault(policy_id, "").isEmpty(), "Invalid request target.");
+            if (owner != null) {
+                if (!policyInfo.getString("owner").equals(owner)) {
+                    checked = false;
+                }
+
+                if (!labelInfo.getString("owner").equals(owner)) {
+                    checked = false;
+                }
             }
 
-            if (!labelInfo.getString("owner").equals(owner)) {
-                checked = false;
-            }
-        }
-
-        if (consumer != null) {
-            if (!policyInfo.getString("consumer").equals(consumer)) {
-                checked = false;
+            if (consumer != null) {
+                if (!policyInfo.getString("consumer").equals(consumer)) {
+                    checked = false;
+                }
             }
         }
 
@@ -317,9 +325,11 @@ public class PdsPolicy {
             labelExpireAt = new BigInteger(labelInfo.getString("expire_at"));
         }
 
-        BigInteger policyExpireAt = BigInteger.ZERO;
-        if (!policyInfo.getString("expire_at").isEmpty()) {
-            policyExpireAt = new BigInteger(policyInfo.getString("expire_at"));
+        BigInteger policyExpireAt = labelExpireAt;
+        if (policyInfo != null) {
+            if (!policyInfo.getString("expire_at").isEmpty()) {
+                policyExpireAt = new BigInteger(policyInfo.getString("expire_at"));
+            }
         }
 
         String expireAt = "";
