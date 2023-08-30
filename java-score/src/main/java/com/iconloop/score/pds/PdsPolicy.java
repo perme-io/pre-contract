@@ -66,10 +66,16 @@ public class PdsPolicy {
                           @Optional byte[] owner_sign,
                           @Optional String producer,
                           @Optional String producer_expire_at,
-                          @Optional String expire_at) {
+                          @Optional String expire_at,
+                          @Optional String capsule,
+                          @Optional String data) {
         LabelInfo labelInfo = new LabelInfo(label_id);
         Context.require(!label_id.isEmpty(), "Blank key is not allowed.");
-        Context.require(this.labelInfos.getOrDefault(label_id, "").isEmpty(), "It has already been added.");
+
+        if (!this.labelInfos.getOrDefault(label_id, "").isEmpty()) {
+            labelInfo = LabelInfo.fromString(this.labelInfos.get(label_id));
+            Context.require(labelInfo.getString("producer").equals(producer), "It has already been added.");
+        }
 
         BigInteger blockTimeStamp = new BigInteger(String.valueOf(Context.getBlockTimestamp()));
         String owner = Context.getCaller().toString();
@@ -82,7 +88,7 @@ public class PdsPolicy {
         String producerExpireAt =  (producer_expire_at == null) ? String.valueOf(blockTimeStamp.add(ONE_YEAR)) : producer_expire_at;
         String expireAt =  (expire_at == null) ? String.valueOf(blockTimeStamp.add(ONE_YEAR)) : expire_at;
 
-        labelInfo.fromParams(name, owner, producerID, producerExpireAt, null, null, null, null, String.valueOf(Context.getBlockTimestamp()), expireAt);
+        labelInfo.fromParams(name, owner, producerID, producerExpireAt, capsule, data, null, null, String.valueOf(Context.getBlockTimestamp()), expireAt);
         this.labelInfos.set(label_id, labelInfo.toString());
         PDSEvent(EventType.AddLabel.name(), label_id, producerID);
 
@@ -205,7 +211,11 @@ public class PdsPolicy {
                            @Optional String expire_at) {
         PolicyInfo policyInfo = new PolicyInfo(policy_id);
         Context.require(!policy_id.isEmpty(), "Blank key is not allowed.");
-        Context.require(this.policyInfos.getOrDefault(policy_id, "").isEmpty(), "It has already been added.");
+
+        if (!this.policyInfos.getOrDefault(policy_id, "").isEmpty()) {
+            policyInfo = PolicyInfo.fromString(this.policyInfos.get(policy_id));
+            Context.require(policyInfo.getString("owner").equals(Context.getCaller().toString()), "It has already been added.");
+        }
 
         Context.require(!this.labelInfos.getOrDefault(label_id, "").isEmpty(), "Invalid request target.");
         LabelInfo labelInfo = LabelInfo.fromString(this.labelInfos.get(label_id));
@@ -299,7 +309,7 @@ public class PdsPolicy {
         Context.require(!this.labelInfos.getOrDefault(labelId, "").isEmpty(), "Invalid request target.");
         LabelInfo labelInfo = LabelInfo.fromString(this.labelInfos.get(labelId));
 
-        if (labelInfo.getString("owner").equals(consumer)) {
+        if (labelInfo.getString("producer").equals(consumer)) {
             checked = true;
         } else {
             Context.require(!this.policyInfos.getOrDefault(policy_id, "").isEmpty(), "Invalid request target.");
