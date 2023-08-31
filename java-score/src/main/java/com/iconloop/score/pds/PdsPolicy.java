@@ -301,6 +301,7 @@ public class PdsPolicy {
 
         PolicyInfo policyInfo = null;
         String labelId = policy_id;
+        String target_name = "";
         if (!this.policyInfos.getOrDefault(policy_id, "").isEmpty()) {
             policyInfo = PolicyInfo.fromString(this.policyInfos.get(policy_id));
             labelId = policyInfo.getString("label_id");
@@ -308,11 +309,13 @@ public class PdsPolicy {
 
         Context.require(!this.labelInfos.getOrDefault(labelId, "").isEmpty(), "Invalid request target.");
         LabelInfo labelInfo = LabelInfo.fromString(this.labelInfos.get(labelId));
+        target_name = labelInfo.getString("name");
 
         if (labelInfo.getString("producer").equals(consumer)) {
             checked = true;
         } else {
             Context.require(!this.policyInfos.getOrDefault(policy_id, "").isEmpty(), "Invalid request target.");
+            target_name = policyInfo.getString("name");
             if (owner != null) {
                 if (!policyInfo.getString("owner").equals(owner)) {
                     checked = false;
@@ -348,11 +351,11 @@ public class PdsPolicy {
         } else {
             expireAt = labelExpireAt.toString();
         }
-
+ 
         return Map.ofEntries(
                 Map.entry("policy_id", policy_id),
                 Map.entry("label_id", labelId),
-                Map.entry("name", policyInfo.getString("name")),
+                Map.entry("name", target_name),
                 Map.entry("checked", checked),
                 Map.entry("expire_at", expireAt)
         );
