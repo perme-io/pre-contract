@@ -84,11 +84,9 @@ public class PdsPolicy {
 
         BigInteger blockTimeStamp = new BigInteger(String.valueOf(Context.getBlockTimestamp()));
         String owner = Context.getCaller().toString();
-        BigInteger contentNonce = BigInteger.ZERO;
         if (owner_did != null) {
             DidMessage didMessage = getDidMessage(owner_did, owner_sign);
             owner = didMessage.did;
-            contentNonce = didMessage.nonce;
             Context.require(label_id.equals(didMessage.target), "Invalid Content(LabelInfo) target.");
         }
 
@@ -96,9 +94,9 @@ public class PdsPolicy {
         String producerExpireAt =  (producer_expire_at == null) ? String.valueOf(blockTimeStamp.add(ONE_YEAR)) : producer_expire_at;
         String expireAt =  (expire_at == null) ? String.valueOf(blockTimeStamp.add(ONE_YEAR)) : expire_at;
 
-        LabelInfo labelInfo = new LabelInfo(label_id, name, owner, producerID, producerExpireAt, "", "", "", null, String.valueOf(Context.getBlockTimestamp()), expireAt, contentNonce);
+        LabelInfo labelInfo = new LabelInfo(label_id, name, owner, producerID, producerExpireAt, "", "", null, String.valueOf(Context.getBlockTimestamp()), expireAt, null);
         this.labelInfos.set(label_id, labelInfo);
-        PDSEvent(EventType.AddLabel.name(), label_id, producerID, labelInfo.getNonce());
+        PDSEvent(EventType.AddLabel.name(), label_id, producerID, labelInfo.getLastUpdated());
 
         BigInteger total = this.labelCount.getOrDefault(BigInteger.ZERO);
         this.labelCount.set(total.add(BigInteger.ONE));
@@ -117,7 +115,7 @@ public class PdsPolicy {
         if (owner_did != null) {
             DidMessage didMessage = getDidMessage(owner_did, owner_sign);
             owner = didMessage.did;
-            Context.require(labelInfo.checkNonce(didMessage.nonce), "Invalid Content(LabelInfo) nonce.");
+            Context.require(labelInfo.checkLastUpdated(didMessage.nonce), "Invalid Content(LabelInfo) nonce.");
             Context.require(label_id.equals(didMessage.target), "Invalid Content(LabelInfo) target.");
         }
         if (!labelInfo.checkOwner(owner)) {
@@ -135,7 +133,7 @@ public class PdsPolicy {
         }
 
         this.labelInfos.set(label_id, null);
-        PDSEvent(EventType.RemoveLabel.name(), label_id, labelInfo.getProducer(), labelInfo.getNonce());
+        PDSEvent(EventType.RemoveLabel.name(), label_id, labelInfo.getProducer(), labelInfo.getLastUpdated());
 
         BigInteger total = this.labelCount.getOrDefault(BigInteger.ZERO);
         this.labelCount.set(total.subtract(BigInteger.ONE));
@@ -158,7 +156,7 @@ public class PdsPolicy {
         if (owner_did != null) {
             DidMessage didMessage = getDidMessage(owner_did, owner_sign);
             owner = didMessage.did;
-            Context.require(labelInfo.checkNonce(didMessage.nonce), "Invalid Content(LabelInfo) nonce.");
+            Context.require(labelInfo.checkLastUpdated(didMessage.nonce), "Invalid Content(LabelInfo) nonce.");
             Context.require(label_id.equals(didMessage.target), "Invalid Content(LabelInfo) target.");
         }
 
@@ -174,9 +172,9 @@ public class PdsPolicy {
             producerAddress = producer;
         }
 
-        labelInfo.update(name, null, producerAddress, producerExpireAt, null, null, null, null, "", expire_at);
+        labelInfo.update(name, null, producerAddress, producerExpireAt, null, null, null, null, expire_at);
         this.labelInfos.set(label_id, labelInfo);
-        PDSEvent(EventType.UpdateLabel.name(), label_id, labelInfo.getProducer(), labelInfo.getNonce());
+        PDSEvent(EventType.UpdateLabel.name(), label_id, labelInfo.getProducer(), labelInfo.getLastUpdated());
     }
 
     @External()
@@ -193,16 +191,16 @@ public class PdsPolicy {
         if (producer_did != null) {
             DidMessage didMessage = getDidMessage(producer_did, producer_sign);
             producer = didMessage.did;
-            Context.require(labelInfo.checkNonce(didMessage.nonce), "Invalid Content(LabelInfo) nonce.");
+            Context.require(labelInfo.checkLastUpdated(didMessage.nonce), "Invalid Content(LabelInfo) nonce.");
             Context.require(label_id.equals(didMessage.target), "Invalid Content(LabelInfo) target.");
         }
         if (!labelInfo.getProducer().equals(producer)) {
             Context.revert(101, "You do not have permission.");
         }
 
-        labelInfo.update(null, null, null, null, capsule, data, String.valueOf(Context.getBlockTimestamp()), null, "", null);
+        labelInfo.update(null, null, null, null, capsule, data, null, "", null);
         this.labelInfos.set(label_id, labelInfo);
-        PDSEvent(EventType.UpdateData.name(), label_id, labelInfo.getProducer(), labelInfo.getNonce());
+        PDSEvent(EventType.UpdateData.name(), label_id, labelInfo.getProducer(), labelInfo.getLastUpdated());
     }
 
     @External(readonly=true)
