@@ -115,7 +115,7 @@ public class PdsPolicy {
         if (owner_did != null) {
             DidMessage didMessage = getDidMessage(owner_did, owner_sign);
             owner = didMessage.did;
-            Context.require(labelInfo.checkLastUpdated(didMessage.nonce), "Invalid Content(LabelInfo) nonce.");
+            Context.require(labelInfo.checkLastUpdated(didMessage.nonce), "Invalid Content(LabelInfo) lastUpdated.");
             Context.require(label_id.equals(didMessage.target), "Invalid Content(LabelInfo) target.");
         }
         if (!labelInfo.checkOwner(owner)) {
@@ -127,7 +127,7 @@ public class PdsPolicy {
         for (String policyId : policyList) {
             PolicyInfo policyInfo = this.policyInfos.get(policyId);
             if (policyInfo != null) {
-                PDSEvent(EventType.RemovePolicy.name(), policyId, policyInfo.getConsumer(), policyInfo.getNonce());
+                PDSEvent(EventType.RemovePolicy.name(), policyId, policyInfo.getConsumer(), policyInfo.getLastUpdated());
                 this.policyInfos.set(policyId, null);
             }
         }
@@ -252,7 +252,7 @@ public class PdsPolicy {
         );
         this.policyInfos.set(policy_id, policyInfo);
         this.labelInfos.set(label_id, labelInfo);
-        PDSEvent(EventType.AddPolicy.name(), policy_id, consumer, policyInfo.getNonce());
+        PDSEvent(EventType.AddPolicy.name(), policy_id, consumer, policyInfo.getLastUpdated());
 
         BigInteger total = this.policyCount.getOrDefault(BigInteger.ZERO);
         this.policyCount.set(total.add(BigInteger.ONE));
@@ -268,7 +268,7 @@ public class PdsPolicy {
         if (owner_did != null) {
             DidMessage didMessage = getDidMessage(owner_did, owner_sign);
             owner = didMessage.did;
-            Context.require(policyInfo.checkNonce(didMessage.nonce), "Invalid Content(PolicyInfo) nonce.");
+            Context.require(policyInfo.checkLastUpdated(didMessage.nonce), "Invalid Content(PolicyInfo) lastUpdated.");
             Context.require(policy_id.equals(didMessage.target), "Invalid Content(PolicyInfo) target.");
         }
         if (!policyInfo.checkOwner(owner)) {
@@ -295,7 +295,7 @@ public class PdsPolicy {
             labelInfo.setPolicies(newPolicyList);
 
             this.labelInfos.set(policyInfo.getLabelId(), labelInfo);
-            PDSEvent(EventType.RemovePolicy.name(), policy_id, policyInfo.getConsumer(), policyInfo.getNonce());
+            PDSEvent(EventType.RemovePolicy.name(), policy_id, policyInfo.getConsumer(), policyInfo.getLastUpdated());
         }
 
         this.policyInfos.set(policy_id, null);

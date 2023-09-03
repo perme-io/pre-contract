@@ -265,9 +265,10 @@ public class PdsPolicyTest extends TestBase {
         DidSignature sign_2 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_POLICY_TO_REMOVE", BigInteger.ZERO);
         pdsPolicyScore.invoke(owners[0], "add_policy","TEST_POLICY_TO_REMOVE", "TEST_LABEL_FOR_POLICY", "TEST_POLICY_A", owners_did[0], 3, 5, sign_2.message, sign_2.signature, null, null);
 
-        DidSignature sign_3 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_POLICY_TO_REMOVE", BigInteger.ONE);
+        var policyInfo = (Map<String, Object>) pdsPolicyScore.call("get_policy","TEST_POLICY_TO_REMOVE", null, owners_did[0]);
+        DidSignature sign_3 = makeSignature(owners_did[0], owners_keyPair[0], "publicKey", "TEST_POLICY_TO_REMOVE", (BigInteger) policyInfo.get("last_updated"));
         pdsPolicyScore.invoke(owners[0], "remove_policy","TEST_POLICY_TO_REMOVE", sign_3.message, sign_3.signature);
-        verify(pdsPolicySpy).PDSEvent(EventType.RemovePolicy.name(), "TEST_POLICY_TO_REMOVE", owners_did[0], BigInteger.ZERO);
+        verify(pdsPolicySpy).PDSEvent(EventType.RemovePolicy.name(), "TEST_POLICY_TO_REMOVE", owners_did[0], (BigInteger) policyInfo.get("last_updated"));
     }
 
     @Test
