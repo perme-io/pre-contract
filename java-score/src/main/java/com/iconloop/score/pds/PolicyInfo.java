@@ -42,7 +42,7 @@ public class PolicyInfo {
         this.proxies = proxies;
         this.created = created;
         this.expireAt = expire_at;
-        this.lastUpdated = (lastUpdated != null) ? lastUpdated : new BigInteger(String.valueOf(Context.getBlockTimestamp()));
+        this.lastUpdated = (lastUpdated != null) ? lastUpdated : BigInteger.valueOf(Context.getBlockTimestamp());
     }
 
     public boolean checkOwner(String owner) {

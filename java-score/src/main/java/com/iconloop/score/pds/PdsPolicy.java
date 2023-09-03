@@ -85,7 +85,7 @@ public class PdsPolicy {
         BigInteger blockTimeStamp = new BigInteger(String.valueOf(Context.getBlockTimestamp()));
         String owner = Context.getCaller().toString();
         if (owner_did != null) {
-            DidMessage didMessage = getDidMessage(owner_did, owner_sign);
+            DidMessage didMessage = getDidMessage(owner_did, Context.getCaller(), label_id, "add_label", BigInteger.ZERO, owner_sign);
             owner = didMessage.did;
             Context.require(label_id.equals(didMessage.target), "Invalid Content(LabelInfo) target.");
         }
@@ -113,9 +113,9 @@ public class PdsPolicy {
         // Verify owner
         String owner = Context.getCaller().toString();
         if (owner_did != null) {
-            DidMessage didMessage = getDidMessage(owner_did, owner_sign);
+            DidMessage didMessage = getDidMessage(owner_did, Context.getCaller(), label_id, "remove_label", labelInfo.getLastUpdated(), owner_sign);
             owner = didMessage.did;
-            Context.require(labelInfo.checkLastUpdated(didMessage.nonce), "Invalid Content(LabelInfo) lastUpdated.");
+            Context.require(labelInfo.checkLastUpdated(didMessage.lastUpdated), "Invalid Content(LabelInfo) lastUpdated.");
             Context.require(label_id.equals(didMessage.target), "Invalid Content(LabelInfo) target.");
         }
         if (!labelInfo.checkOwner(owner)) {
@@ -154,9 +154,9 @@ public class PdsPolicy {
         // Verify owner
         String owner = Context.getCaller().toString();
         if (owner_did != null) {
-            DidMessage didMessage = getDidMessage(owner_did, owner_sign);
+            DidMessage didMessage = getDidMessage(owner_did, Context.getCaller(), label_id, "update_label", labelInfo.getLastUpdated(), owner_sign);
             owner = didMessage.did;
-            Context.require(labelInfo.checkLastUpdated(didMessage.nonce), "Invalid Content(LabelInfo) nonce.");
+            Context.require(labelInfo.checkLastUpdated(didMessage.lastUpdated), "Invalid Content(LabelInfo) lastUpdated.");
             Context.require(label_id.equals(didMessage.target), "Invalid Content(LabelInfo) target.");
         }
 
@@ -189,9 +189,9 @@ public class PdsPolicy {
         // Verify producer
         String producer = Context.getCaller().toString();
         if (producer_did != null) {
-            DidMessage didMessage = getDidMessage(producer_did, producer_sign);
+            DidMessage didMessage = getDidMessage(producer_did, Context.getCaller(), label_id, "update_data", labelInfo.getLastUpdated(), producer_sign);
             producer = didMessage.did;
-            Context.require(labelInfo.checkLastUpdated(didMessage.nonce), "Invalid Content(LabelInfo) nonce.");
+            Context.require(labelInfo.checkLastUpdated(didMessage.lastUpdated), "Invalid Content(LabelInfo) lastUpdated.");
             Context.require(label_id.equals(didMessage.target), "Invalid Content(LabelInfo) target.");
         }
         if (!labelInfo.getProducer().equals(producer)) {
@@ -227,11 +227,9 @@ public class PdsPolicy {
         Context.require(labelInfo != null, "Invalid request target(label).");
 
         String owner = Context.getCaller().toString();
-        BigInteger contentNonce = BigInteger.ZERO;
         if (owner_did != null) {
-            DidMessage didMessage = getDidMessage(owner_did, owner_sign);
+            DidMessage didMessage = getDidMessage(owner_did, Context.getCaller(), policy_id, "add_policy", BigInteger.ZERO, owner_sign);
             owner = didMessage.did;
-            contentNonce = didMessage.nonce;
             Context.require(policy_id.equals(didMessage.target), "Invalid Content(PolicyInfo) target.");
         }
         if (!labelInfo.checkOwner(owner)) {
@@ -248,7 +246,7 @@ public class PdsPolicy {
         String expireAt =  (expire_at == null) ? String.valueOf(blockTimeStamp.add(ONE_YEAR)) : expire_at;
 
         PolicyInfo policyInfo = new PolicyInfo(
-                policy_id, label_id, name, owner, consumer, threshold, proxy_number, proxies, String.valueOf(Context.getBlockTimestamp()), expireAt, contentNonce
+                policy_id, label_id, name, owner, consumer, threshold, proxy_number, proxies, String.valueOf(Context.getBlockTimestamp()), expireAt, null
         );
         this.policyInfos.set(policy_id, policyInfo);
         this.labelInfos.set(label_id, labelInfo);
@@ -266,9 +264,9 @@ public class PdsPolicy {
         // Verify policy owner
         String owner = Context.getCaller().toString();
         if (owner_did != null) {
-            DidMessage didMessage = getDidMessage(owner_did, owner_sign);
+            DidMessage didMessage = getDidMessage(owner_did, Context.getCaller(), policy_id, "remove_policy", policyInfo.getLastUpdated(), owner_sign);
             owner = didMessage.did;
-            Context.require(policyInfo.checkLastUpdated(didMessage.nonce), "Invalid Content(PolicyInfo) lastUpdated.");
+            Context.require(policyInfo.checkLastUpdated(didMessage.lastUpdated), "Invalid Content(PolicyInfo) lastUpdated.");
             Context.require(policy_id.equals(didMessage.target), "Invalid Content(PolicyInfo) target.");
         }
         if (!policyInfo.checkOwner(owner)) {
@@ -495,16 +493,13 @@ public class PdsPolicy {
     }
 
     // Verify secp256k1 recoverable signature
-    private boolean verifySign(String msg, byte[] sign) {
+    private boolean verifySign(DidMessage msg, byte[] sign) {
         if (this.didSummaryScore.getOrDefault(null) == null) {
             Context.revert(102, "No External SCORE to verify DID.");
         }
 
-        DidMessage didMessage = Helper.DidMessageParser(msg);
-        String publicKey = (String) Context.call(this.didSummaryScore.get(), "getPublicKey", didMessage.did, didMessage.kid);
-
-        byte[] msgHash = Context.hash("keccak-256", msg.getBytes());
-        byte[] recoveredKeyBytes = Context.recoverKey("ecdsa-secp256k1", msgHash, sign, false);
+        String publicKey = (String) Context.call(this.didSummaryScore.get(), "getPublicKey", msg.did, msg.kid);
+        byte[] recoveredKeyBytes = Context.recoverKey("ecdsa-secp256k1", msg.getHashedMessage(), sign, false);
         String recoveredKey = new BigInteger(recoveredKeyBytes).toString(16);
 
 //        System.out.println("publicKey(verifySign): " + publicKey);
@@ -513,9 +508,17 @@ public class PdsPolicy {
         return publicKey.equals(recoveredKey);
     }
 
-    private DidMessage getDidMessage(String msg, byte[] sign) {
-        Context.require(verifySign(msg, sign), "Invalid did signature.");
-        return Helper.DidMessageParser(msg);
+    private DidMessage getDidMessage(String msg, Address from, String target, String method, BigInteger lastUpdated, byte[] sign) {
+        DidMessage receivedMessage = DidMessage.parser(msg);
+        DidMessage generatedMessage = new DidMessage(receivedMessage.did, receivedMessage.kid, from, target, method, lastUpdated);
+        byte[] hashedMessage = Context.hash("keccak-256", generatedMessage.getMessageForHash());
+        generatedMessage.setHashedMessage(hashedMessage);
+
+//        System.out.println("generatedMessage: " + generatedMessage.getMessage());
+//        System.out.println("receivedMessage: " + receivedMessage.getMessage());
+        Context.require(receivedMessage.getMessage().equals(generatedMessage.getMessage()), "Invalid did message.");
+        Context.require(verifySign(generatedMessage, sign), "Invalid did signature.");
+        return generatedMessage;
     }
 
     @Payable
@@ -527,5 +530,5 @@ public class PdsPolicy {
      * Events
      */
     @EventLog
-    protected void PDSEvent(String event, String value1, String value2, BigInteger nonce) {}
+    protected void PDSEvent(String event, String value1, String value2, BigInteger lastUpdated) {}
 }

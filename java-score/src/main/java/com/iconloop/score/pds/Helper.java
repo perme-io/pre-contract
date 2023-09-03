@@ -41,32 +41,4 @@ public class Helper {
 
         return stringList;
     }
-
-    public static DidMessage DidMessageParser(String message) {
-        String[] did_info = new String[4];
-        StringTokenizer st = new StringTokenizer(message, "#");
-        int countTokens = st.countTokens();
-
-        int index = 0;
-        while (st.hasMoreTokens()) {
-            did_info[index++] = st.nextToken();
-        }
-
-        String did = message;
-        String kid = "publicKey";
-        String target = "";
-        String nonce = "0";
-
-        if (countTokens >= 2) {
-            did = did_info[0];
-            kid = did_info[1];
-        }
-
-        if (countTokens == 4) {
-            target = did_info[2];
-            nonce = did_info[3];
-        }
-
-        return new DidMessage(did, kid, Address.fromString("hx56ad924be6005c2e363d35f0418b7722388d791d"), target, "", BigInteger.ZERO, new BigInteger(nonce, 10));
-    }
 }

@@ -43,7 +43,7 @@ public class LabelInfo {
         this.policies = policies;
         this.created = created;
         this.expireAt = expireAt;
-        this.lastUpdated = (lastUpdated != null) ? lastUpdated : new BigInteger(String.valueOf(Context.getBlockTimestamp()));
+        this.lastUpdated = (lastUpdated != null) ? lastUpdated : BigInteger.valueOf(Context.getBlockTimestamp());
     }
 
     public void update(String name,
@@ -64,7 +64,7 @@ public class LabelInfo {
         this.policies = (policies == null) ? this.policies : policies;
         this.created = (created == null) ? this.created : created;
         this.expireAt = (expireAt == null) ? this.expireAt : expireAt;
-        this.lastUpdated = new BigInteger(String.valueOf(Context.getBlockTimestamp()));
+        this.lastUpdated = BigInteger.valueOf(Context.getBlockTimestamp());
     }
 
     public boolean checkOwner(String owner) {
