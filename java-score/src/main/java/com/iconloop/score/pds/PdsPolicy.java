@@ -87,7 +87,7 @@ public class PdsPolicy {
         if (owner_did != null) {
             DidMessage didMessage = getDidMessage(owner_did, Context.getCaller(), label_id, "add_label", BigInteger.ZERO, owner_sign);
             owner = didMessage.did;
-            Context.require(label_id.equals(didMessage.target), "Invalid Content(LabelInfo) target.");
+            Context.require(label_id.equals(didMessage.getTarget()), "Invalid Content(LabelInfo) target.");
         }
 
         String producerID = (producer == null) ? owner : producer;
@@ -115,8 +115,8 @@ public class PdsPolicy {
         if (owner_did != null) {
             DidMessage didMessage = getDidMessage(owner_did, Context.getCaller(), label_id, "remove_label", labelInfo.getLastUpdated(), owner_sign);
             owner = didMessage.did;
-            Context.require(labelInfo.checkLastUpdated(didMessage.lastUpdated), "Invalid Content(LabelInfo) lastUpdated.");
-            Context.require(label_id.equals(didMessage.target), "Invalid Content(LabelInfo) target.");
+            Context.require(labelInfo.checkLastUpdated(didMessage.getLastUpdated()), "Invalid Content(LabelInfo) lastUpdated.");
+            Context.require(label_id.equals(didMessage.getTarget()), "Invalid Content(LabelInfo) target.");
         }
         if (!labelInfo.checkOwner(owner)) {
             Context.revert(101, "You do not have permission.");
@@ -156,8 +156,8 @@ public class PdsPolicy {
         if (owner_did != null) {
             DidMessage didMessage = getDidMessage(owner_did, Context.getCaller(), label_id, "update_label", labelInfo.getLastUpdated(), owner_sign);
             owner = didMessage.did;
-            Context.require(labelInfo.checkLastUpdated(didMessage.lastUpdated), "Invalid Content(LabelInfo) lastUpdated.");
-            Context.require(label_id.equals(didMessage.target), "Invalid Content(LabelInfo) target.");
+            Context.require(labelInfo.checkLastUpdated(didMessage.getLastUpdated()), "Invalid Content(LabelInfo) lastUpdated.");
+            Context.require(label_id.equals(didMessage.getTarget()), "Invalid Content(LabelInfo) target.");
         }
 
         if (!labelInfo.checkOwner(owner)) {
@@ -191,14 +191,14 @@ public class PdsPolicy {
         if (producer_did != null) {
             DidMessage didMessage = getDidMessage(producer_did, Context.getCaller(), label_id, "update_data", labelInfo.getLastUpdated(), producer_sign);
             producer = didMessage.did;
-            Context.require(labelInfo.checkLastUpdated(didMessage.lastUpdated), "Invalid Content(LabelInfo) lastUpdated.");
-            Context.require(label_id.equals(didMessage.target), "Invalid Content(LabelInfo) target.");
+            Context.require(labelInfo.checkLastUpdated(didMessage.getLastUpdated()), "Invalid Content(LabelInfo) lastUpdated.");
+            Context.require(label_id.equals(didMessage.getTarget()), "Invalid Content(LabelInfo) target.");
         }
         if (!labelInfo.getProducer().equals(producer)) {
             Context.revert(101, "You do not have permission.");
         }
 
-        labelInfo.update(null, null, null, null, capsule, data, null, "", null);
+        labelInfo.update(null, null, null, null, capsule, data, null, null, null);
         this.labelInfos.set(label_id, labelInfo);
         PDSEvent(EventType.UpdateData.name(), label_id, labelInfo.getProducer(), labelInfo.getLastUpdated());
     }
@@ -230,7 +230,7 @@ public class PdsPolicy {
         if (owner_did != null) {
             DidMessage didMessage = getDidMessage(owner_did, Context.getCaller(), policy_id, "add_policy", BigInteger.ZERO, owner_sign);
             owner = didMessage.did;
-            Context.require(policy_id.equals(didMessage.target), "Invalid Content(PolicyInfo) target.");
+            Context.require(policy_id.equals(didMessage.getTarget()), "Invalid Content(PolicyInfo) target.");
         }
         if (!labelInfo.checkOwner(owner)) {
             Context.revert(101, "You do not have permission.");
@@ -266,8 +266,8 @@ public class PdsPolicy {
         if (owner_did != null) {
             DidMessage didMessage = getDidMessage(owner_did, Context.getCaller(), policy_id, "remove_policy", policyInfo.getLastUpdated(), owner_sign);
             owner = didMessage.did;
-            Context.require(policyInfo.checkLastUpdated(didMessage.lastUpdated), "Invalid Content(PolicyInfo) lastUpdated.");
-            Context.require(policy_id.equals(didMessage.target), "Invalid Content(PolicyInfo) target.");
+            Context.require(policyInfo.checkLastUpdated(didMessage.getLastUpdated()), "Invalid Content(PolicyInfo) lastUpdated.");
+            Context.require(policy_id.equals(didMessage.getTarget()), "Invalid Content(PolicyInfo) target.");
         }
         if (!policyInfo.checkOwner(owner)) {
             Context.revert(101, "You do not have permission.");
@@ -509,16 +509,16 @@ public class PdsPolicy {
     }
 
     private DidMessage getDidMessage(String msg, Address from, String target, String method, BigInteger lastUpdated, byte[] sign) {
-        DidMessage receivedMessage = DidMessage.parser(msg);
-        DidMessage generatedMessage = new DidMessage(receivedMessage.did, receivedMessage.kid, from, target, method, lastUpdated);
-        byte[] hashedMessage = Context.hash("keccak-256", generatedMessage.getMessageForHash());
-        generatedMessage.setHashedMessage(hashedMessage);
+        DidMessage message = DidMessage.parse(msg);
+        message.update(from, target, method, lastUpdated);
+        byte[] hashedMessage = Context.hash("keccak-256", message.getMessageForHash());
+        message.setHashedMessage(hashedMessage);
 
-//        System.out.println("generatedMessage: " + generatedMessage.getMessage());
-//        System.out.println("receivedMessage: " + receivedMessage.getMessage());
-        Context.require(receivedMessage.getMessage().equals(generatedMessage.getMessage()), "Invalid did message.");
-        Context.require(verifySign(generatedMessage, sign), "Invalid did signature.");
-        return generatedMessage;
+//        System.out.println("receivedMessage: " + msg);
+//        System.out.println("generatedMessage: " + message.getMessage());
+        Context.require(message.getMessage().equals(msg), "Invalid did message.");
+        Context.require(verifySign(message, sign), "Invalid did signature.");
+        return message;
     }
 
     @Payable

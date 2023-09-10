@@ -11,10 +11,10 @@ public class DidMessage {
     public final String version;
     public final String did;
     public final String kid;
-    public final Address from;
-    public final String target;
-    public final String method;
-    public final BigInteger lastUpdated;
+    private Address from;
+    private String target;
+    private String method;
+    private BigInteger lastUpdated;
     private byte[] hashedMessage;
     private byte[] signature;
 
@@ -29,8 +29,23 @@ public class DidMessage {
         this.hashedMessage = null;
     }
 
+    public void update(Address from, String target, String method, BigInteger lastUpdated) {
+        this.from = (from == null) ? this.from : from;
+        this.target = (target == null) ? this.target : target;
+        this.method = (method == null) ? this.method : method;
+        this.lastUpdated = (lastUpdated == null) ? this.lastUpdated : lastUpdated;
+    }
+
     public String getVersion() {
         return this.version;
+    }
+
+    public String getTarget() {
+        return this.target;
+    }
+
+    public BigInteger getLastUpdated() {
+        return this.lastUpdated;
     }
 
     public String getMessage() {
@@ -59,7 +74,7 @@ public class DidMessage {
         return this.signature;
     }
 
-    public static DidMessage parser(String message) {
+    public static DidMessage parse(String message) {
         String[] did_info = new String[4];
         StringTokenizer st = new StringTokenizer(message, "#");
         int countTokens = st.countTokens();

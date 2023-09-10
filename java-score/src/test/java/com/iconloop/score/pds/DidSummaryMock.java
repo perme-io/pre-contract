@@ -26,25 +26,22 @@ public class DidSummaryMock {
     @External
     public void addPublicKey(String did_msg, byte[] did_sign) {
         // TODO remove kid parameter.
-        DidMessage receivedMessage = DidMessage.parser(did_msg);
-        DidMessage generatedMessage = new DidMessage(receivedMessage.did, receivedMessage.kid, Context.getCaller(), "", "", BigInteger.ZERO);
-
-        byte[] msgHash = Context.hash("keccak-256", generatedMessage.getMessageForHash());
-        byte[] recoveredKey = Context.recoverKey("ecdsa-secp256k1", msgHash, did_sign, false);
+        DidMessage message = DidMessage.parse(did_msg);
+        byte[] recoveredKey = Context.recoverKey("ecdsa-secp256k1", message.getHashedMessage(), did_sign, false);
         String publicKey = new BigInteger(recoveredKey).toString(16);
 
 //        System.out.println("Recovered in SCORE: " + publicKey);
-//        System.out.println("didMessage.did: " + receivedMessage.did);
+//        System.out.println("didMessage.did: " + message.did);
 
-        DidInfo didInfo = this.didInfos.get(receivedMessage.did);
+        DidInfo didInfo = this.didInfos.get(message.did);
         if (didInfo == null) {
-            didInfo = new DidInfo(receivedMessage.did, null, null);
+            didInfo = new DidInfo(message.did, null, null);
         }
 
-        didInfo.addPublicKey(receivedMessage.kid, publicKey);
-        this.didInfos.set(receivedMessage.did, didInfo);
+        didInfo.addPublicKey(message.kid, publicKey);
+        this.didInfos.set(message.did, didInfo);
 
-        DIDSummaryEvent(SummaryEventType.AddPublicKey.name(), receivedMessage.did, receivedMessage.kid);
+        DIDSummaryEvent(SummaryEventType.AddPublicKey.name(), message.did, message.kid);
     }
 
     @External(readonly=true)
