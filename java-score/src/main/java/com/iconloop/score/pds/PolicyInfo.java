@@ -1,5 +1,6 @@
 package com.iconloop.score.pds;
 
+import score.Context;
 import score.ObjectReader;
 import score.ObjectWriter;
 
@@ -18,7 +19,7 @@ public class PolicyInfo {
     private final String[] proxies;
     private final String created;
     private final String expireAt;
-    private BigInteger nonce;
+    private BigInteger lastUpdated;
 
     public PolicyInfo(String policyId,
                       String labelId,
@@ -30,7 +31,7 @@ public class PolicyInfo {
                       String[] proxies,
                       String created,
                       String expire_at,
-                      BigInteger nonce) {
+                      BigInteger lastUpdated) {
         this.policyId = policyId;
         this.labelId = labelId;
         this.name = name;
@@ -41,7 +42,7 @@ public class PolicyInfo {
         this.proxies = proxies;
         this.created = created;
         this.expireAt = expire_at;
-        this.nonce = nonce;
+        this.lastUpdated = (lastUpdated != null) ? lastUpdated : BigInteger.valueOf(Context.getBlockTimestamp());
     }
 
     public boolean checkOwner(String owner) {
@@ -64,13 +65,12 @@ public class PolicyInfo {
         return expireAt;
     }
 
-    public BigInteger getNonce() {
-        return this.nonce;
+    public BigInteger getLastUpdated() {
+        return this.lastUpdated;
     }
 
-    public boolean checkNonce(BigInteger nonce) {
-        // nonce should be increased by 1
-        return this.nonce.equals(nonce.subtract(BigInteger.ONE));
+    public boolean checkLastUpdated(BigInteger lastUpdated) {
+        return this.lastUpdated.equals(lastUpdated);
     }
 
     public static void writeObject(ObjectWriter w, PolicyInfo t) {
@@ -86,7 +86,7 @@ public class PolicyInfo {
         w.writeNullable(proxiesJsonString);
         w.writeNullable(t.created);
         w.writeNullable(t.expireAt);
-        w.write(t.nonce);
+        w.write(t.lastUpdated);
         w.end();
     }
 
@@ -120,7 +120,7 @@ public class PolicyInfo {
                 Map.entry("proxies", this.proxies),
                 Map.entry("created", this.created),
                 Map.entry("expireAt", this.expireAt),
-                Map.entry("nonce", this.nonce)
+                Map.entry("last_updated", this.lastUpdated)
         );
     }
 }

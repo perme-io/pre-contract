@@ -6,7 +6,6 @@ import score.Context;
 import score.DictDB;
 import score.annotation.EventLog;
 import score.annotation.External;
-import score.annotation.Payable;
 
 import java.math.BigInteger;
 
@@ -25,26 +24,24 @@ public class DidSummaryMock {
     }
 
     @External
-    public void addPublicKey(String did_msg, String kid, byte[] did_sign) {
-        DidMessage didMessage = Helper.DidMessageParser(did_msg);
-
-        byte[] msgHash = Context.hash("keccak-256", did_msg.getBytes());
-//        System.out.println("message in SCORE: " + did_msg);
-        byte[] recoveredKey = Context.recoverKey("ecdsa-secp256k1", msgHash, did_sign, false);
+    public void addPublicKey(String did_msg, byte[] did_sign) {
+        // TODO remove kid parameter.
+        DidMessage message = DidMessage.parse(did_msg);
+        byte[] recoveredKey = Context.recoverKey("ecdsa-secp256k1", message.getHashedMessage(), did_sign, false);
         String publicKey = new BigInteger(recoveredKey).toString(16);
 
 //        System.out.println("Recovered in SCORE: " + publicKey);
-//        System.out.println("didMessage.did: " + didMessage.did);
+//        System.out.println("didMessage.did: " + message.did);
 
-        DidInfo didInfo = this.didInfos.get(didMessage.did);
+        DidInfo didInfo = this.didInfos.get(message.did);
         if (didInfo == null) {
-            didInfo = new DidInfo(didMessage.did, null, null);
+            didInfo = new DidInfo(message.did, null, null);
         }
 
-        didInfo.addPublicKey(kid, publicKey);
-        this.didInfos.set(didMessage.did, didInfo);
+        didInfo.addPublicKey(message.kid, publicKey);
+        this.didInfos.set(message.did, didInfo);
 
-        DIDSummaryEvent(SummaryEventType.AddPublicKey.name(), didMessage.did, kid);
+        DIDSummaryEvent(SummaryEventType.AddPublicKey.name(), message.did, message.kid);
     }
 
     @External(readonly=true)
