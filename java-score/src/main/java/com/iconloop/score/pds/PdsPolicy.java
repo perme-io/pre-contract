@@ -1,6 +1,10 @@
 package com.iconloop.score.pds;
 
-import score.*;
+import score.Address;
+import score.ArrayDB;
+import score.Context;
+import score.DictDB;
+import score.VarDB;
 import score.annotation.EventLog;
 import score.annotation.External;
 import score.annotation.Optional;
@@ -22,7 +26,7 @@ enum EventType {
     UpdateNode
 }
 
-public class PdsPolicy {
+public class PdsPolicy implements Label, Policy, Node {
     private static final BigInteger ONE_YEAR = new BigInteger("31536000000000");
     private static final BigInteger ONE_ICX = new BigInteger("1000000000000000000");
 
@@ -41,7 +45,7 @@ public class PdsPolicy {
         this.policyInfos = Context.newDictDB("policyInfos", PolicyInfo.class);
     }
 
-    @External()
+    @External
     public void set_did_summary_score(Address did_summary_score) {
         Context.require(Context.getCaller().equals(Context.getOwner()), "Only owner can call this method.");
         this.didSummaryScore.set(did_summary_score);
@@ -52,26 +56,35 @@ public class PdsPolicy {
         return this.didSummaryScore.getOrDefault(null);
     }
 
-    @External()
+    @External
     public void set_min_stake_value(BigInteger min_stake_for_serve) {
         Context.require(Context.getCaller().equals(Context.getOwner()), "Only owner can call this method.");
         this.minStakeForServe.set(min_stake_for_serve);
     }
 
     @External(readonly=true)
-    public Map<String, Object> get_min_stake_value() {
-        return Map.ofEntries(
-                Map.entry("min_stake_for_serve", this.minStakeForServe.getOrDefault(BigInteger.valueOf(0)))
-        );
+    public BigInteger get_min_stake_value() {
+        return this.minStakeForServe.getOrDefault(BigInteger.ZERO);
     }
 
     @External(readonly=true)
-    public Map<String, Object> get_label(String label_id) {
-        LabelInfo labelInfo = this.labelInfos.get(label_id);
-        return labelInfo.toMap();
+    public LabelInfo get_label(String label_id) {
+        return this.labelInfos.get(label_id);
     }
 
-    @External()
+    @External
+    public void add_label(String label_id,
+                          String name,
+                          String public_key,
+                          BigInteger expire_at,
+                          String owner_sign,
+                          @Optional String category,
+                          @Optional String producer,
+                          @Optional BigInteger producer_expire_at,
+                          @Optional String data,
+                          @Optional BigInteger data_size) {
+    }
+
     public void add_label(String label_id,
                           String name,
                           @Optional String owner_did,
@@ -102,8 +115,11 @@ public class PdsPolicy {
         this.labelCount.set(total.add(BigInteger.ONE));
     }
 
-    // TODO Add @Optional owner_did, If fail in did auth, message has did auth fail.
-    @External()
+    @External
+    public void remove_label(String label_id,
+                             String owner_sign) {
+    }
+
     public void remove_label(String label_id,
                              @Optional String owner_did,
                              @Optional byte[] owner_sign) {
@@ -139,8 +155,16 @@ public class PdsPolicy {
         this.labelCount.set(total.subtract(BigInteger.ONE));
     }
 
-    // TODO Add @Optional owner_did
-    @External()
+    @External
+    public void update_label(String label_id,
+                             String owner_sign,
+                             @Optional String name,
+                             @Optional BigInteger expire_at,
+                             @Optional String category,
+                             @Optional String producer,
+                             @Optional BigInteger producer_expire_at) {
+    }
+
     public void update_label(String label_id,
                              @Optional String owner_did,
                              @Optional byte[] owner_sign,
@@ -177,7 +201,15 @@ public class PdsPolicy {
         PDSEvent(EventType.UpdateLabel.name(), label_id, labelInfo.getProducer(), labelInfo.getLastUpdated());
     }
 
-    @External()
+    @External
+    public void add_data(String label_id,
+                         String data,
+                         String name,
+                         BigInteger size,
+                         String producer_sign) {
+
+    }
+
     public void update_data(String label_id,
                             String data,
                             @Optional String producer_did,
@@ -204,12 +236,27 @@ public class PdsPolicy {
     }
 
     @External(readonly=true)
-    public Map<String, Object> get_policy(String policy_id) {
-        PolicyInfo policyInfo = this.policyInfos.get(policy_id);
-        return policyInfo.toMap();
+    public Page<DataInfo> get_data(String label_id,
+                                   BigInteger offset,
+                                   @Optional BigInteger limit) {
+        return null;
     }
 
-    @External()
+    @External(readonly=true)
+    public PolicyInfo get_policy(String policy_id) {
+        return this.policyInfos.get(policy_id);
+    }
+
+    @External
+    public void add_policy(String policy_id,
+                           String label_id,
+                           String name,
+                           String consumer,
+                           BigInteger threshold,
+                           String owner_sign,
+                           @Optional BigInteger expire_at) {
+    }
+
     public void add_policy(String policy_id,
                            String label_id,
                            String name,
@@ -256,7 +303,13 @@ public class PdsPolicy {
         this.policyCount.set(total.add(BigInteger.ONE));
     }
 
-    @External()
+    @External
+    public void update_policy(String policy_id,
+                              BigInteger expire_at,
+                              String owner_sign) {
+
+    }
+
     public void remove_policy(String policy_id, @Optional String owner_did, @Optional byte[] owner_sign) {
         PolicyInfo policyInfo = this.policyInfos.get(policy_id);
         Context.require(policyInfo != null, "Invalid request target(policy).");
@@ -303,6 +356,10 @@ public class PdsPolicy {
     }
 
     @External(readonly=true)
+    public Map<String, Object> check_policy(String policy_id) {
+        return Map.of();
+    }
+
     public Map<String, Object> check_policy(String policy_id,
                                             @Optional String owner,
                                             @Optional String consumer) {
@@ -352,13 +409,26 @@ public class PdsPolicy {
     }
 
     @External(readonly=true)
-    public Map<String, Object> get_node(String peer_id) {
-        NodeInfo nodeInfo = this.nodeInfos.get(peer_id);
-        return nodeInfo.toMap();
+    public Page<PolicyInfo> get_policies(String label_id,
+                                         BigInteger offset,
+                                         @Optional BigInteger limit) {
+        return null;
     }
 
-    @External()
+    @External(readonly=true)
+    public NodeInfo get_node(String peer_id) {
+        return this.nodeInfos.get(peer_id);
+    }
+
+    @External
     @Payable
+    public void add_node(String peer_id,
+                         String name,
+                         String endpoint,
+                         @Optional Address owner) {
+
+    }
+
     public void add_node(String peer_id,
                          @Optional String endpoint,
                          @Optional String name,
@@ -384,7 +454,7 @@ public class PdsPolicy {
         PDSEvent(EventType.AddNode.name(), peer_id, nodeInfo.getEndpoint(), BigInteger.ZERO);
     }
 
-    @External()
+    @External
     public void remove_node(String peer_id) {
         NodeInfo nodeInfo = this.nodeInfos.get(peer_id);
         Context.require(nodeInfo != null, "Invalid request target(node).");
@@ -398,8 +468,15 @@ public class PdsPolicy {
         PDSEvent(EventType.RemoveNode.name(), peer_id, nodeInfo.getEndpoint(), BigInteger.ZERO);
     }
 
-    @External()
+    @External
     @Payable
+    public void update_node(String peer_id,
+                            @Optional Address owner,
+                            @Optional String name,
+                            @Optional String endpoint) {
+
+    }
+
     public void update_node(String peer_id,
                             @Optional String endpoint,
                             @Optional String name,
@@ -446,27 +523,13 @@ public class PdsPolicy {
         }
     }
 
-    @External()
-    public void reset__() {
-        // TODO 개발 과정에서 컨트랙트 리셋 용도로 사용하는 임시 함수, 운영을 위한 배포시에는 이 메소드는 전체 제거되어야 함.
-        // Check permission
-        Context.require(Context.getOwner().equals(Context.getCaller()), "You do not have permission.");
-
-        String peer_id;
-        int peer_count = this.peers.size();
-        for (int i = 0; i < peer_count; i++) {
-            peer_id = this.peers.pop();
-            this.nodeInfos.set(peer_id, null);
-        }
-    }
-
-    @External(readonly = true)
-    public List<Object> all_node() {
-        Object[] allNode = new Object[this.peers.size()];
+    @External(readonly=true)
+    public List<NodeInfo> all_nodes() {
+        NodeInfo[] allNode = new NodeInfo[this.peers.size()];
 
         for (int i=0; i < this.peers.size(); i++) {
             NodeInfo nodeInfo = this.nodeInfos.get(this.peers.get(i));
-            allNode[i] = nodeInfo.toMap();
+            allNode[i] = nodeInfo;
         }
 
         return List.of(allNode);
@@ -521,14 +584,36 @@ public class PdsPolicy {
         return message;
     }
 
-    @Payable
-    public void fallback() {
-        // just receive incoming funds
-    }
-
     /*
      * Events
      */
     @EventLog
     protected void PDSEvent(String event, String value1, String value2, BigInteger lastUpdated) {}
+
+    @EventLog(indexed=3)
+    public void LabelAdded(String label_id, String owner, String producer) {}
+
+    @EventLog(indexed=1)
+    public void LabelRemoved(String label_id) {}
+
+    @EventLog(indexed=1)
+    public void LabelUpdated(String label_id) {}
+
+    @EventLog(indexed=2)
+    public void LabelData(String label_id, String data) {}
+
+    @EventLog(indexed=3)
+    public void PolicyAdded(String policy_id, String label_id, String consumer) {}
+
+    @EventLog(indexed=1)
+    public void PolicyUpdated(String policy_id) {}
+
+    @EventLog(indexed=2)
+    public void NodeAdded(String peer_id, Address owner) {}
+
+    @EventLog(indexed=2)
+    public void NodeUpdated(String peer_id, Address owner) {}
+
+    @EventLog(indexed=1)
+    public void NodeRemoved(String peer_id) {}
 }
