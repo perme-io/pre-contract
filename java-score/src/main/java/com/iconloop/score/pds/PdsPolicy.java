@@ -31,29 +31,21 @@ public class PdsPolicy implements Label, Policy, Node {
     private static final BigInteger ONE_ICX = new BigInteger("1000000000000000000");
 
     private final ArrayDB<String> peers = Context.newArrayDB("peers", String.class);
-    private final DictDB<String, LabelInfo> labelInfos;
-    private final DictDB<String, NodeInfo> nodeInfos;
-    private final DictDB<String, PolicyInfo> policyInfos;
+    private final DictDB<String, LabelInfo> labelInfos = Context.newDictDB("labelInfos", LabelInfo.class);
+    private final DictDB<String, NodeInfo> nodeInfos = Context.newDictDB("nodeInfos", NodeInfo.class);
+    private final DictDB<String, PolicyInfo> policyInfos = Context.newDictDB("policyInfos", PolicyInfo.class);
     private final VarDB<BigInteger> labelCount = Context.newVarDB("labelCount", BigInteger.class);
     private final VarDB<BigInteger> policyCount = Context.newVarDB("policyCount", BigInteger.class);
     private final VarDB<BigInteger> minStakeForServe = Context.newVarDB("minStakeForServe", BigInteger.class);
-    private final VarDB<Address> didSummaryScore = Context.newVarDB("didSummaryScore", Address.class);
+    private final VarDB<Address> didScore = Context.newVarDB("didScore", Address.class);
 
-    public PdsPolicy() {
-        this.labelInfos = Context.newDictDB("labelInfos", LabelInfo.class);
-        this.nodeInfos = Context.newDictDB("nodeInfos", NodeInfo.class);
-        this.policyInfos = Context.newDictDB("policyInfos", PolicyInfo.class);
-    }
-
-    @External
-    public void set_did_summary_score(Address did_summary_score) {
-        Context.require(Context.getCaller().equals(Context.getOwner()), "Only owner can call this method.");
-        this.didSummaryScore.set(did_summary_score);
+    public PdsPolicy(Address did_score) {
+        this.didScore.set(did_score);
     }
 
     @External(readonly=true)
-    public Address get_did_summary_score() {
-        return this.didSummaryScore.getOrDefault(null);
+    public Address get_did_score() {
+        return this.didScore.get();
     }
 
     @External
@@ -557,11 +549,11 @@ public class PdsPolicy implements Label, Policy, Node {
 
     // Verify secp256k1 recoverable signature
     private boolean verifySign(DidMessage msg, byte[] sign) {
-        if (this.didSummaryScore.getOrDefault(null) == null) {
+        if (this.didScore.getOrDefault(null) == null) {
             Context.revert(102, "No External SCORE to verify DID.");
         }
 
-        String publicKey = (String) Context.call(this.didSummaryScore.get(), "getPublicKey", msg.did, msg.kid);
+        String publicKey = (String) Context.call(this.didScore.get(), "getPublicKey", msg.did, msg.kid);
         byte[] recoveredKeyBytes = Context.recoverKey("ecdsa-secp256k1", msg.getHashedMessage(), sign, false);
         String recoveredKey = new BigInteger(recoveredKeyBytes).toString(16);
 
