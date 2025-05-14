@@ -169,8 +169,7 @@ public class PdsPolicy implements Label, Policy, Node {
         String ownerId = sigChecker.getOwnerId();
         Context.require(labelInfo.checkOwner(ownerId), "You do not have permission.");
 
-        var attrs = new LabelInfo.Builder()
-                .lastUpdated(Context.getBlockHeight());
+        var attrs = new LabelInfo.Builder();
         if (name != null) {
             attrs.name(name);
         }
@@ -188,7 +187,9 @@ public class PdsPolicy implements Label, Policy, Node {
         if (producer_expire_at.signum() > 0) {
             Context.require(producer_expire_at.compareTo(blockTimestamp) > 0, "producer_expire_at must be greater than blockTimestamp");
             Context.require(producer_expire_at.compareTo(expire_at) <= 0, "producer_expire_at must be less than equal to expire_at");
+            attrs.producerExpireAt(producer_expire_at);
         }
+        attrs.lastUpdated(Context.getBlockHeight());
 
         labelInfo.update(attrs);
         this.labelInfos.set(label_id, labelInfo);
