@@ -1,148 +1,236 @@
 package com.iconloop.score.pds;
 
-import score.Context;
 import score.ObjectReader;
 import score.ObjectWriter;
 
 import java.math.BigInteger;
-import java.util.Map;
-
 
 public class LabelInfo {
-    private final String labelId;
+    private final String label_id;
+    private final String owner;
     private String name;
-    private String owner;
+    private String public_key;
+    private BigInteger expire_at;
+    private String category;
     private String producer;
-    private String producerExpireAt;
-    private String capsule;
-    private String data;
-    private String[] policies;
-    private String created;
-    private String expireAt;
-    private BigInteger lastUpdated;
+    private BigInteger producer_expire_at;
+    private final long created;
+    private long last_updated;
+    private long revoked;
 
-
-    public LabelInfo(String labelId,
-                     String name,
-                     String owner,
-                     String producer,
-                     String producerExpireAt,
-                     String capsule,
-                     String data,
-                     String[] policies,
-                     String created,
-                     String expireAt,
-                     BigInteger lastUpdated) {
-        this.labelId = labelId;
-        this.name = name;
-        this.owner = owner;
-        this.producer = producer;
-        this.producerExpireAt = producerExpireAt;
-        this.capsule = capsule;
-        this.data = data;
-        this.policies = policies;
-        this.created = created;
-        this.expireAt = expireAt;
-        this.lastUpdated = (lastUpdated != null) ? lastUpdated : BigInteger.valueOf(Context.getBlockTimestamp());
+    public LabelInfo(Builder builder) {
+        this.label_id = builder.labelId;
+        this.owner = builder.owner;
+        this.name = builder.name;
+        this.public_key = builder.publicKey;
+        this.expire_at = builder.expireAt;
+        this.category = builder.category;
+        this.producer = builder.producer;
+        this.producer_expire_at = builder.producerExpireAt;
+        this.created = builder.created;
+        this.last_updated = Math.max(builder.lastUpdated, created);
     }
 
-    public void update(String name,
-                       String owner,
-                       String producer,
-                       String producerExpireAt,
-                       String capsule,
-                       String data,
-                       String[] policies,
-                       String created,
-                       String expireAt) {
-        this.name = (name == null) ? this.name : name;
-        this.owner = (owner == null) ? this.owner : owner;
-        this.producer = (producer == null) ? this.producer : producer;
-        this.producerExpireAt = (producerExpireAt == null) ? this.producerExpireAt : producerExpireAt;
-        this.capsule = (capsule == null) ? this.capsule : capsule;
-        this.data = (data == null) ? this.data : data;
-        this.policies = (policies == null) ? this.policies : policies;
-        this.created = (created == null) ? this.created : created;
-        this.expireAt = (expireAt == null) ? this.expireAt : expireAt;
-        this.lastUpdated = BigInteger.valueOf(Context.getBlockTimestamp());
+    public String getLabel_id() {
+        return label_id;
+    }
+
+    public String getOwner() {
+        return owner;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getPublic_key() {
+        return public_key;
+    }
+
+    public BigInteger getExpire_at() {
+        return expire_at;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public String getProducer() {
+        return producer;
+    }
+
+    public BigInteger getProducer_expire_at() {
+        return producer_expire_at;
+    }
+
+    public long getCreated() {
+        return created;
+    }
+
+    public long getLast_updated() {
+        return last_updated;
+    }
+
+    @Override
+    public String toString() {
+        return "LabelInfo{" +
+                "label_id='" + label_id + '\'' +
+                ", owner='" + owner + '\'' +
+                ", name='" + name + '\'' +
+                ", public_key='" + public_key + '\'' +
+                ", expire_at=" + expire_at +
+                ", category='" + category + '\'' +
+                ", producer='" + producer + '\'' +
+                ", producer_expire_at=" + producer_expire_at +
+                ", created=" + created +
+                ", last_updated=" + last_updated +
+                ", revoked=" + revoked +
+                '}';
+    }
+
+    public static void writeObject(ObjectWriter w, LabelInfo l) {
+        w.writeListOfNullable(
+                l.label_id,
+                l.owner,
+                l.name,
+                l.public_key,
+                l.expire_at,
+                l.category,
+                l.producer,
+                l.producer_expire_at,
+                l.created,
+                l.last_updated,
+                l.revoked);
+    }
+
+    public static LabelInfo readObject(ObjectReader r) {
+        r.beginList();
+        LabelInfo l = new Builder()
+                .labelId(r.readString())
+                .owner(r.readString())
+                .name(r.readString())
+                .publicKey(r.readString())
+                .expireAt(r.readBigInteger())
+                .category(r.readNullable(String.class))
+                .producer(r.readString())
+                .producerExpireAt(r.readBigInteger())
+                .created(r.readLong())
+                .lastUpdated(r.readLong())
+                .build();
+        l.revoked = r.readLong();
+        r.end();
+        return l;
+    }
+
+    public void revoke(long height) {
+        this.revoked = height;
+        this.last_updated = height;
+    }
+
+    public boolean isRevoked() {
+        return this.revoked > 0;
+    }
+
+    public void update(Builder attrs) {
+        if (attrs.name != null) {
+            this.name = attrs.name;
+        }
+        if (attrs.expireAt != null) {
+            this.expire_at = attrs.expireAt;
+        }
+        if (attrs.category != null) {
+            this.category = attrs.category;
+        }
+        if (attrs.producer != null) {
+            this.producer = attrs.producer;
+        }
+        if (attrs.producerExpireAt != null) {
+            this.producer_expire_at = attrs.producerExpireAt;
+        }
+        this.last_updated = attrs.lastUpdated;
     }
 
     public boolean checkOwner(String owner) {
         return this.owner.equals(owner);
     }
 
-    public String getProducer() {
-        return this.producer;
-    }
-
-    public void setPolicies(String[] policies) {
-        this.policies = policies;
-    }
-
-    public String[] getPolicies() {
-        return this.policies;
-    }
-
-    public BigInteger getExpireAt() {
-        return (this.expireAt.isEmpty()) ? BigInteger.ZERO : new BigInteger(this.expireAt);
-    }
-
-    public BigInteger getLastUpdated() {
-        return this.lastUpdated;
-    }
-
     public boolean checkLastUpdated(BigInteger lastUpdated) {
-        return this.lastUpdated.equals(lastUpdated);
+        return lastUpdated.longValue() >= last_updated;
     }
 
-    public static void writeObject(ObjectWriter w, LabelInfo t) {
-        String policiesJsonString = Helper.StringListToJsonString(t.policies);
-        w.beginList(11);
-        w.writeNullable(t.labelId);
-        w.writeNullable(t.name);
-        w.writeNullable(t.owner);
-        w.writeNullable(t.producer);
-        w.writeNullable(t.producerExpireAt);
-        w.writeNullable(t.capsule);
-        w.writeNullable(t.data);
-        w.writeNullable(policiesJsonString);
-        w.writeNullable(t.created);
-        w.writeNullable(t.expireAt);
-        w.write(t.lastUpdated);
-        w.end();
+    // TODO
+    public String[] getPolicies() {
+        return new String[0];
     }
 
-    public static LabelInfo readObject(ObjectReader r) {
-        r.beginList();
-        LabelInfo t = new LabelInfo(
-                r.readNullable(String.class),
-                r.readNullable(String.class),
-                r.readNullable(String.class),
-                r.readNullable(String.class),
-                r.readNullable(String.class),
-                r.readNullable(String.class),
-                r.readNullable(String.class),
-                Helper.JsonStringToStringList("policies", r.readNullable(String.class)),
-                r.readNullable(String.class),
-                r.readNullable(String.class),
-                r.readBigInteger());
-        r.end();
-        return t;
+    // TODO
+    public void setPolicies(String[] policies) {
     }
 
-    public Map<String, Object> toMap() {
-        return Map.ofEntries(
-                Map.entry("label_id", this.labelId),
-                Map.entry("name", this.name),
-                Map.entry("owner", this.owner),
-                Map.entry("producer", this.producer),
-                Map.entry("producer_expire_at", this.producerExpireAt),
-                Map.entry("capsule", this.capsule),
-                Map.entry("data", this.data),
-                Map.entry("policies", this.policies),
-                Map.entry("created", this.created),
-                Map.entry("expire_at", this.expireAt),
-                Map.entry("last_updated", this.lastUpdated)
-        );
+    public static class Builder {
+        private String labelId;
+        private String owner;
+        private String name;
+        private String publicKey;
+        private BigInteger expireAt;
+        private String category;
+        private String producer;
+        private BigInteger producerExpireAt;
+        private long created;
+        private long lastUpdated;
+
+        public Builder labelId(String labelId) {
+            this.labelId = labelId;
+            return this;
+        }
+
+        public Builder owner(String owner) {
+            this.owner = owner;
+            return this;
+        }
+
+        public Builder name(String name) {
+            this.name = name;
+            return this;
+        }
+
+        public Builder publicKey(String publicKey) {
+            this.publicKey = publicKey;
+            return this;
+        }
+
+        public Builder expireAt(BigInteger expireAt) {
+            this.expireAt = expireAt;
+            return this;
+        }
+
+        public Builder category(String category) {
+            this.category = category;
+            return this;
+        }
+
+        public Builder producer(String producer) {
+            this.producer = producer;
+            return this;
+        }
+
+        public Builder producerExpireAt(BigInteger producerExpireAt) {
+            this.producerExpireAt = producerExpireAt;
+            return this;
+        }
+
+        public Builder created(long created) {
+            this.created = created;
+            return this;
+        }
+
+        public Builder lastUpdated(long lastUpdated) {
+            this.lastUpdated = lastUpdated;
+            return this;
+        }
+
+        public LabelInfo build() {
+            return new LabelInfo(this);
+        }
     }
 }

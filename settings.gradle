@@ -1,2 +1,5 @@
 rootProject.name = 'pds-policy-contract'
-include ('java-score')
+include (
+    'java-score',
+    'utils',
+)

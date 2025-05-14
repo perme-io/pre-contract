@@ -14,6 +14,7 @@ dependencies {
     compileOnly 'foundation.icon:javaee-api:0.9.6'
     implementation 'foundation.icon:javaee-scorex:0.5.4.1'
     implementation 'com.github.sink772:minimal-json:0.9.7'
+    implementation project(':utils')
 
     testImplementation 'foundation.icon:javaee-unittest:0.12.2'
     testImplementation 'org.mockito:mockito-core:5.13.0'
@@ -22,6 +23,7 @@ dependencies {
 
     testImplementation 'org.web3j:crypto:5.0.0'
     testImplementation 'foundation.icon:icon-sdk:2.5.2'
+    testImplementation fileTree(dir: '../libs', include: 'icon-did-*.jar')
 }
 
 optimizedJar {
