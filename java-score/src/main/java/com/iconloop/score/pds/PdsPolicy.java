@@ -1,6 +1,7 @@
 package com.iconloop.score.pds;
 
 import com.parametacorp.jwt.Payload;
+import com.parametacorp.util.Converter;
 import score.Address;
 import score.ArrayDB;
 import score.Context;
@@ -10,6 +11,7 @@ import score.annotation.EventLog;
 import score.annotation.External;
 import score.annotation.Optional;
 import score.annotation.Payable;
+import scorex.util.StringTokenizer;
 
 import java.math.BigInteger;
 import java.util.List;
@@ -72,6 +74,27 @@ public class PdsPolicy implements Label, Policy, Node {
         return labelInfo;
     }
 
+    private String validateDid(String did) {
+        String[] tokens = new String[4];
+        StringTokenizer tokenizer = new StringTokenizer(did, ":");
+        for (int i = 0; i < tokens.length; i++) {
+            Context.require(tokenizer.hasMoreTokens(), "validateDid: need more tokens");
+            tokens[i] = tokenizer.nextToken();
+        }
+        Context.require(!tokenizer.hasMoreTokens(), "validateDid: should be no more tokens");
+        if ("did".equals(tokens[0]) && "icon".equals(tokens[1])) {
+            try {
+                byte[] nid = Converter.hexToBytes(tokens[2]);
+                byte[] idAndChecksum = Converter.hexToBytes(tokens[3]);
+                if (idAndChecksum.length == 24) {
+                    return did;
+                }
+            } catch (IllegalArgumentException ignored) {}
+        }
+        Context.revert("invalid did");
+        return null;
+    }
+
     @External
     public void add_label(String label_id,
                           String name,
@@ -97,7 +120,7 @@ public class PdsPolicy implements Label, Policy, Node {
         BigInteger blockTimestamp = BigInteger.valueOf(Context.getBlockTimestamp());
         Context.require(expire_at.compareTo(blockTimestamp) > 0, "expire_at must be greater than blockTimestamp");
 
-        String producerId = (producer == null) ? ownerId : producer;
+        String producerId = (producer == null) ? ownerId : validateDid(producer);
         BigInteger producerExpireAt = (producer_expire_at.signum() == 0) ? expire_at : producer_expire_at;
         Context.require(producerExpireAt.compareTo(blockTimestamp) > 0, "producer_expire_at must be greater than blockTimestamp");
         Context.require(producerExpireAt.compareTo(expire_at) <= 0, "producer_expire_at must be less than equal to expire_at");
@@ -117,7 +140,7 @@ public class PdsPolicy implements Label, Policy, Node {
 
         var labelInfo = labelBuilder.build();
         this.labelInfos.set(label_id, labelInfo);
-        LabelAdded(label_id, ownerId, producer);
+        LabelAdded(label_id, ownerId, producerId);
 
         BigInteger total = get_label_count();
         this.labelCount.set(total.add(BigInteger.ONE));
@@ -182,7 +205,7 @@ public class PdsPolicy implements Label, Policy, Node {
             attrs.category(category);
         }
         if (producer != null) {
-            attrs.producer(producer);
+            attrs.producer(validateDid(producer));
         }
         if (producer_expire_at.signum() > 0) {
             Context.require(producer_expire_at.compareTo(blockTimestamp) > 0, "producer_expire_at must be greater than blockTimestamp");
@@ -202,39 +225,30 @@ public class PdsPolicy implements Label, Policy, Node {
                          String name,
                          BigInteger size,
                          String producer_sign) {
+        var labelInfo = checkLabelId(label_id);
 
-    }
+        var sigChecker = new SignatureChecker();
+        Context.require(sigChecker.verifySig(get_did_score(), producer_sign), "failed to verify producer_sign");
+        var expected = new Payload.Builder("add_data")
+                .labelId(label_id)
+                .dataId(data)
+                .build();
+        Context.require(sigChecker.validatePayload(expected), "failed to validate payload");
 
-    public void update_data(String label_id,
-                            String data,
-                            @Optional String producer_did,
-                            @Optional byte[] producer_sign,
-                            @Optional String capsule) {
-        LabelInfo labelInfo = this.labelInfos.get(label_id);
-        Context.require(labelInfo != null, "Invalid request target(label).");
+        String producer = sigChecker.getOwnerId();
+        Context.require(labelInfo.getProducer().equals(producer), "unauthorized producer");
 
-        // Verify producer
-        String producer = Context.getCaller().toString();
-        if (producer_did != null) {
-//            DidMessage didMessage = getDidMessage(producer_did, Context.getCaller(), label_id, "update_data", labelInfo.getLast_updated(), producer_sign);
-//            producer = didMessage.did;
-//            Context.require(labelInfo.checkLastUpdated(didMessage.getLastUpdated()), "Invalid Content(LabelInfo) lastUpdated.");
-//            Context.require(label_id.equals(didMessage.getTarget()), "Invalid Content(LabelInfo) target.");
-        }
-        if (!labelInfo.getProducer().equals(producer)) {
-            Context.revert(101, "You do not have permission.");
-        }
-
-//        labelInfo.update(null, null, null, null, capsule, data, null, null, null);
-        this.labelInfos.set(label_id, labelInfo);
-//        PDSEvent(EventType.UpdateData.name(), label_id, labelInfo.getProducer(), labelInfo.getLast_updated());
+        var dataInfo = new DataInfo(data, name, size);
+        Context.require(labelInfo.addData(dataInfo), "data already exists");
+        LabelData(label_id, data);
     }
 
     @External(readonly=true)
-    public Page<DataInfo> get_data(String label_id,
-                                   BigInteger offset,
-                                   @Optional BigInteger limit) {
-        return null;
+    public PageOfData get_data(String label_id,
+                               int offset,
+                               @Optional int limit) {
+        var labelInfo = checkLabelId(label_id);
+        return labelInfo.getDataPage(offset, limit);
     }
 
     @External(readonly=true)

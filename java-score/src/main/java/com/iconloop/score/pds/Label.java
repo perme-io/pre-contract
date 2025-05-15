@@ -104,18 +104,18 @@ public interface Label {
                   String producer_sign);
 
     /**
-     * Retrieves a paginated list of data associated with the given label ID.
+     * Retrieves a page of data associated with the given label ID.
      *
      * @param label_id The label ID associated with the data.
-     * @param offset The starting position of the data to retrieve.
-     * @param limit (Optional) The maximum number of data to retrieve.
-     *              If null, a default value or all remaining policies may be returned.
+     * @param offset The starting position (can be negative for end-relative indexing).
+     * @param limit (Optional) The maximum number of items to return.
+     *              If null, a default size or all remaining items may be returned.
      *
      * @return A paginated result containing the list of data.
      */
-    Page<DataInfo> get_data(String label_id,
-                            BigInteger offset,
-                            @Optional BigInteger limit);
+    PageOfData get_data(String label_id,
+                        int offset,
+                        @Optional int limit);
 
     /**
      * Notifies when a new label is added.

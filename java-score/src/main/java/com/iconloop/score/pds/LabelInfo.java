@@ -1,5 +1,6 @@
 package com.iconloop.score.pds;
 
+import com.parametacorp.util.EnumerableMap;
 import score.ObjectReader;
 import score.ObjectWriter;
 
@@ -18,6 +19,8 @@ public class LabelInfo {
     private long last_updated;
     private long revoked;
 
+    private final EnumerableMap<String, DataInfo> dataMap;
+
     public LabelInfo(Builder builder) {
         this.label_id = builder.labelId;
         this.owner = builder.owner;
@@ -29,6 +32,8 @@ public class LabelInfo {
         this.producer_expire_at = builder.producerExpireAt;
         this.created = builder.created;
         this.last_updated = Math.max(builder.lastUpdated, created);
+
+        this.dataMap = new EnumerableMap<>(label_id, String.class, DataInfo.class);
     }
 
     public String getLabel_id() {
@@ -156,6 +161,40 @@ public class LabelInfo {
 
     public boolean checkLastUpdated(BigInteger lastUpdated) {
         return lastUpdated.longValue() >= last_updated;
+    }
+
+    public boolean addData(DataInfo dataInfo) {
+        var dataId = dataInfo.getData();
+        // check duplicate first
+        if (dataMap.get(dataId) != null) {
+            return false;
+        }
+        dataMap.set(dataId, dataInfo);
+        return true;
+    }
+
+    private static final int DEFAULT_PAGE_SIZE = 25;
+
+    public PageOfData getDataPage(int offset, int limit) {
+        int total = dataMap.length();
+        if (total == 0) {
+            return new PageOfData(0, 0, 0, new DataInfo[0]);
+        }
+        int start = Math.min(offset, total - 1);
+        if (start < 0) {
+            start = total + start;
+            if (start < 0) {
+                start = 0;
+            }
+        }
+        limit = (limit > 0) ? limit : DEFAULT_PAGE_SIZE;
+        int size = Math.min(limit, total - start);
+        DataInfo[] infos = new DataInfo[size];
+        for (int i = 0; i < size; i++) {
+            var key = dataMap.getKey(start + i);
+            infos[i] = dataMap.get(key);
+        }
+        return new PageOfData(start, size, total, infos);
     }
 
     // TODO

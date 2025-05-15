@@ -1,14 +1,12 @@
 package com.iconloop.score.pds;
 
-import java.util.List;
+public class PageOfData {
+    private final int offset;
+    private final int size;
+    private final int total;
+    private final DataInfo[] ids;
 
-public class Page<T> {
-    public final int offset;
-    public final int size;
-    public final int total;
-    public final List<T> ids;
-
-    public Page(int offset, int size, int total, List<T> ids) {
+    public PageOfData(int offset, int size, int total, DataInfo[] ids) {
         this.offset = offset;
         this.size = size;
         this.total = total;
@@ -27,7 +25,7 @@ public class Page<T> {
         return total;
     }
 
-    public List<T> getIds() {
+    public DataInfo[] getIds() {
         return ids;
     }
 }

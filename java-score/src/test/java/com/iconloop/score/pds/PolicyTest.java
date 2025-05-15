@@ -58,83 +58,163 @@ public class PolicyTest extends TestBase {
         return "did:icon:03:" + Converter.bytesToHex(buf);
     }
 
-    private String getRandomLabelId() {
-        return "label_" + rand.nextInt(10000);
+    public static class ParamsBuilder {
+        private final DidKeyHolder signer;
+        private final String method;
+        private final String labelId;
+        private long baseHeight;
+        private DidKeyHolder producer;
+        private String dataId;
+
+        public ParamsBuilder(DidKeyHolder signer, String method, String labelId) {
+            this.signer = signer;
+            this.method = method;
+            this.labelId = labelId;
+        }
+
+        public ParamsBuilder baseHeight(long baseHeight) {
+            this.baseHeight = baseHeight;
+            return this;
+        }
+
+        public ParamsBuilder producer(DidKeyHolder producer) {
+            this.producer = producer;
+            return this;
+        }
+
+        public ParamsBuilder dataId(String dataId) {
+            this.dataId = dataId;
+            return this;
+        }
+
+        public Object[] build() throws AlgorithmException {
+            var pb = new Payload.Builder(method)
+                    .labelId(labelId);
+            if (dataId != null) {
+                pb.dataId(dataId);
+            }
+            if (baseHeight > 0) {
+                pb.baseHeight(baseHeight);
+            }
+            Jwt jwt = new Jwt.Builder(signer.getKid())
+                    .payload(pb.build())
+                    .build();
+            var signature = jwt.sign(signer);
+            var timestamp = BigInteger.valueOf(sm.getBlock().getTimestamp());
+            switch (method) {
+                case "add_label":
+                    return new Object[] {
+                            labelId, "name_" + labelId, "<kid>#<publicKey>", timestamp.add(ONE_DAY), signature,
+                            // Optional
+                            null, null, BigInteger.ZERO, null, BigInteger.ZERO
+                    };
+                case "remove_label":
+                    return new Object[] {
+                            labelId, signature,
+                    };
+                case "update_label":
+                    return new Object[] {
+                            labelId, signature,
+                            // Optional
+                            null, BigInteger.ZERO, "newCategory",
+                            (producer != null) ? producer.getDid() : null, BigInteger.ZERO
+                    };
+                case "add_data":
+                    return new Object[] {
+                            labelId, dataId, "name_" + dataId, BigInteger.valueOf(1000), signature,
+                    };
+            }
+            throw new IllegalArgumentException("Invalid method: " + method);
+        }
     }
 
-    private Object[] getParams(DidKeyHolder keyHolder, String method, String labelId) throws AlgorithmException {
-        Payload payload = new Payload.Builder(method)
-                .labelId(labelId)
-                .build();
-        Jwt jwt = new Jwt.Builder(keyHolder.getKid())
-                .payload(payload)
-                .build();
-        var timestamp = BigInteger.valueOf(sm.getBlock().getTimestamp());
-        switch (method) {
-            case "add_label":
-                return new Object[] {
-                        labelId, "name_" + labelId, "<kid>#<publicKey>", timestamp.add(ONE_DAY), jwt.sign(keyHolder),
-                        // Optional
-                        null, null, BigInteger.ZERO, null, BigInteger.ZERO
-                };
-            case "remove_label":
-                return new Object[] {
-                        labelId, jwt.sign(keyHolder)
-                };
-        }
-        throw new IllegalArgumentException("Invalid method: " + method);
+    private String addRandomLabel(DidKeyHolder keyHolder) throws AlgorithmException {
+        var labelId = "label_" + rand.nextInt(10000);
+        policyScore.invoke(owner, "add_label", new ParamsBuilder(keyHolder, "add_label", labelId).build());
+        return labelId;
     }
 
-    private Object[] getParams(DidKeyHolder keyHolder, String method, String labelId, long lastUpdated) throws AlgorithmException {
-        Payload payload = new Payload.Builder(method)
-                .labelId(labelId)
-                .baseHeight(lastUpdated)
-                .build();
-        Jwt jwt = new Jwt.Builder(keyHolder.getKid())
-                .payload(payload)
-                .build();
-        switch (method) {
-            case "update_label":
-                return new Object[] {
-                        labelId, jwt.sign(keyHolder),
-                        // Optional
-                        null, BigInteger.ZERO, "newCategory", null, BigInteger.ZERO
-                };
-        }
-        throw new IllegalArgumentException("Invalid method: " + method);
+    private void removeLabel(DidKeyHolder keyHolder, String labelId) throws AlgorithmException {
+        policyScore.invoke(owner, "remove_label", new ParamsBuilder(keyHolder, "remove_label", labelId).build());
     }
 
     @Test
     void labelTest() throws Exception {
         // add label
-        var labelId = getRandomLabelId();
-        policyScore.invoke(owner, "add_label", getParams(key1, "add_label", labelId));
+        var labelId = addRandomLabel(key1);
         var label = (LabelInfo) policyScore.call("get_label", labelId);
         System.out.println(label);
         assertEquals(BigInteger.ONE, policyScore.call(BigInteger.class, "get_label_count"));
 
         // Negative: try to add with the same labelId
         assertThrows(UserRevertedException.class, () ->
-                policyScore.invoke(owner, "add_label", getParams(key1, "add_label", labelId)));
+                policyScore.invoke(owner, "add_label", new ParamsBuilder(key1, "add_label", labelId).build()));
 
         // update label
-        policyScore.invoke(owner, "update_label", getParams(key1, "update_label", labelId, label.getLast_updated()));
+        policyScore.invoke(owner, "update_label",
+                new ParamsBuilder(key1, "update_label", labelId)
+                        .baseHeight(label.getLast_updated()).build());
         label = (LabelInfo) policyScore.call("get_label", labelId);
         System.out.println(label);
 
         // Negative: try to update with an invalid baseHeight
         final long invalidBaseHeight = label.getLast_updated() - 1;
-        assertThrows(UserRevertedException.class, () ->
-                policyScore.invoke(owner, "update_label", getParams(key1, "update_label", labelId, invalidBaseHeight)));
+        assertThrows(UserRevertedException.class, () -> policyScore.invoke(owner, "update_label",
+                new ParamsBuilder(key1, "update_label", labelId).baseHeight(invalidBaseHeight).build()));
         final long invalidBaseHeight2 = sm.getBlock().getHeight() + 1;
-        assertThrows(UserRevertedException.class, () ->
-                policyScore.invoke(owner, "update_label", getParams(key1, "update_label", labelId, invalidBaseHeight2)));
+        assertThrows(UserRevertedException.class, () -> policyScore.invoke(owner, "update_label",
+                new ParamsBuilder(key1, "update_label", labelId).baseHeight(invalidBaseHeight2).build()));
 
         // remove label
-        policyScore.invoke(owner, "remove_label", getParams(key1, "remove_label", labelId));
+        removeLabel(key1, labelId);
         label = (LabelInfo) policyScore.call("get_label", labelId);
         System.out.println(label);
         assertTrue(label.isRevoked());
         assertEquals(BigInteger.ZERO, policyScore.call(BigInteger.class, "get_label_count"));
+    }
+
+    @Test
+    void addDataTest() throws Exception {
+        // add label
+        String labelId = addRandomLabel(key1);
+        var label = (LabelInfo) policyScore.call("get_label", labelId);
+        System.out.println(label);
+
+        // Negative: try to add data with the unauthorized producer
+        String cid = "data_" + rand.nextInt(10000);
+        assertThrows(UserRevertedException.class, () ->
+                policyScore.invoke(owner, "add_data", new ParamsBuilder(key2, "add_data", labelId).dataId(cid).build()));
+
+        // update producer to key2
+        policyScore.invoke(owner, "update_label",
+                new ParamsBuilder(key1, "update_label", labelId)
+                        .baseHeight(label.getLast_updated())
+                        .producer(key2).build());
+
+        // now add_data should succeed
+        policyScore.invoke(owner, "add_data", new ParamsBuilder(key2, "add_data", labelId).dataId(cid).build());
+
+        // Negative: try to add data with the same cid
+        assertThrows(UserRevertedException.class, () ->
+                policyScore.invoke(owner, "add_data", new ParamsBuilder(key2, "add_data", labelId).dataId(cid).build()));
+
+        // add more data
+        for (int i = 0; i < 30; i++) {
+            var dataId = "data_" + i;
+            policyScore.invoke(owner, "add_data", new ParamsBuilder(key2, "add_data", labelId).dataId(dataId).build());
+        }
+
+        var page = (PageOfData) policyScore.call("get_data", labelId, 0, 0);
+        assertEquals(0, page.getOffset());
+        assertEquals(25, page.getSize());
+        assertEquals(31, page.getTotal());
+
+        var page2 = (PageOfData) policyScore.call("get_data", labelId, -11, 20);
+        assertEquals(20, page2.getOffset());
+        assertEquals(11, page2.getSize());
+        assertEquals(31, page2.getTotal());
+
+        // cleanup: remove label
+        removeLabel(key1, labelId);
     }
 }

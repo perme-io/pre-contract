@@ -15,12 +15,6 @@ public class Payload {
         if (actual == null) {
             return false;
         }
-
-        //DEBUG
-        System.out.println("currentHeight: " + currentHeight);
-        System.out.println("expected: " + payload);
-        System.out.println("actual: " + actual);
-
         if (actual.get("method").asString().equals(payload.get("method").asString())) {
             JsonObject expectedParams = payload.get("params").asObject();
             JsonObject actualParams = actual.get("params").asObject();
@@ -61,6 +55,7 @@ public class Payload {
     public static class Builder {
         private final String method;
         private String labelId;
+        private String dataId;
         private long baseHeight;
 
         public Builder(String method) {
@@ -72,6 +67,11 @@ public class Payload {
             return this;
         }
 
+        public Builder dataId(String data) {
+            this.dataId = data;
+            return this;
+        }
+
         public Builder baseHeight(long height) {
             this.baseHeight = height;
             return this;
@@ -80,6 +80,7 @@ public class Payload {
         public Payload build() {
             JsonObject params = Json.object();
             addIfNotNull(params, "label_id", Json.value(labelId));
+            addIfNotNull(params, "data_id", Json.value(dataId));
             if (baseHeight > 0) {
                 params.add("base_height", Json.value(baseHeight));
             }
