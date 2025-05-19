@@ -16,18 +16,6 @@ import scorex.util.StringTokenizer;
 import java.math.BigInteger;
 import java.util.Map;
 
-enum EventType {
-    AddLabel,
-    RemoveLabel,
-    UpdateLabel,
-    UpdateData,
-    AddPolicy,
-    RemovePolicy,
-    AddNode,
-    RemoveNode,
-    UpdateNode
-}
-
 public class PdsPolicy implements Label, Policy, Node {
     private static final BigInteger ONE_ICX = new BigInteger("1000000000000000000");
 
@@ -445,41 +433,6 @@ public class PdsPolicy implements Label, Policy, Node {
     public BigInteger get_policy_count() {
         return this.policyCount.getOrDefault(BigInteger.ZERO);
     }
-
-    // Verify secp256k1 recoverable signature
-    private boolean verifySign(DidMessage msg, byte[] sign) {
-        if (this.didScore.getOrDefault(null) == null) {
-            Context.revert(102, "No External SCORE to verify DID.");
-        }
-
-        String publicKey = (String) Context.call(this.didScore.get(), "getPublicKey", msg.did, msg.kid);
-        byte[] recoveredKeyBytes = Context.recoverKey("ecdsa-secp256k1", msg.getHashedMessage(), sign, false);
-        String recoveredKey = new BigInteger(recoveredKeyBytes).toString(16);
-
-//        System.out.println("publicKey(verifySign): " + publicKey);
-//        System.out.println("recoveredKey(verifySign): " + recoveredKey);
-
-        return publicKey.equals(recoveredKey);
-    }
-
-    private DidMessage getDidMessage(String msg, Address from, String target, String method, BigInteger lastUpdated, byte[] sign) {
-        DidMessage message = DidMessage.parse(msg);
-        message.update(from, target, method, lastUpdated);
-        byte[] hashedMessage = Context.hash("keccak-256", message.getMessageForHash());
-        message.setHashedMessage(hashedMessage);
-
-//        System.out.println("receivedMessage: " + msg);
-//        System.out.println("generatedMessage: " + message.getMessage());
-        Context.require(message.getMessage().equals(msg), "Invalid did message.");
-        Context.require(verifySign(message, sign), "Invalid did signature.");
-        return message;
-    }
-
-    /*
-     * Events
-     */
-    @EventLog
-    protected void PDSEvent(String event, String value1, String value2, BigInteger lastUpdated) {}
 
     @EventLog(indexed=3)
     public void LabelAdded(String label_id, String owner, String producer) {}
