@@ -80,6 +80,14 @@ public class PdsPolicy implements Label, Policy, Node {
         return null;
     }
 
+    private void verifySignature(SignatureChecker sigChecker, String signature) {
+        Context.require(sigChecker.verifySig(get_did_score(), signature), "failed to verify signature");
+    }
+
+    private void validatePayload(SignatureChecker sigChecker, Payload expected) {
+        Context.require(sigChecker.validatePayload(expected), "failed to validate payload");
+    }
+
     @External
     public void add_label(String label_id,
                           String name,
@@ -95,11 +103,10 @@ public class PdsPolicy implements Label, Policy, Node {
         Context.require(get_label(label_id) == null, "label_id already exists");
 
         var sigChecker = new SignatureChecker();
-        Context.require(sigChecker.verifySig(get_did_score(), owner_sign), "failed to verify owner_sign");
-        var expected = new Payload.Builder("add_label")
+        verifySignature(sigChecker, owner_sign);
+        validatePayload(sigChecker, new Payload.Builder("add_label")
                 .labelId(label_id)
-                .build();
-        Context.require(sigChecker.validatePayload(expected), "failed to validate payload");
+                .build());
 
         String ownerId = sigChecker.getOwnerId();
         BigInteger blockTimestamp = BigInteger.valueOf(Context.getBlockTimestamp());
@@ -139,11 +146,10 @@ public class PdsPolicy implements Label, Policy, Node {
         var labelInfo = checkLabelId(label_id);
 
         var sigChecker = new SignatureChecker();
-        Context.require(sigChecker.verifySig(get_did_score(), owner_sign), "failed to verify owner_sign");
-        var expected = new Payload.Builder("remove_label")
+        verifySignature(sigChecker, owner_sign);
+        validatePayload(sigChecker, new Payload.Builder("remove_label")
                 .labelId(label_id)
-                .build();
-        Context.require(sigChecker.validatePayload(expected), "failed to validate payload");
+                .build());
 
         String ownerId = sigChecker.getOwnerId();
         Context.require(labelInfo.checkOwner(ownerId), "You do not have permission.");
@@ -170,12 +176,11 @@ public class PdsPolicy implements Label, Policy, Node {
         var labelInfo = checkLabelId(label_id);
 
         var sigChecker = new SignatureChecker();
-        Context.require(sigChecker.verifySig(get_did_score(), owner_sign), "failed to verify owner_sign");
-        var expected = new Payload.Builder("update_label")
+        verifySignature(sigChecker, owner_sign);
+        validatePayload(sigChecker, new Payload.Builder("update_label")
                 .labelId(label_id)
                 .baseHeight(labelInfo.getLast_updated())
-                .build();
-        Context.require(sigChecker.validatePayload(expected), "failed to validate payload");
+                .build());
 
         String ownerId = sigChecker.getOwnerId();
         Context.require(labelInfo.checkOwner(ownerId), "You do not have permission.");
@@ -216,12 +221,11 @@ public class PdsPolicy implements Label, Policy, Node {
         var labelInfo = checkLabelId(label_id);
 
         var sigChecker = new SignatureChecker();
-        Context.require(sigChecker.verifySig(get_did_score(), producer_sign), "failed to verify producer_sign");
-        var expected = new Payload.Builder("add_data")
+        verifySignature(sigChecker, producer_sign);
+        validatePayload(sigChecker, new Payload.Builder("add_data")
                 .labelId(label_id)
                 .dataId(data)
-                .build();
-        Context.require(sigChecker.validatePayload(expected), "failed to validate payload");
+                .build());
 
         String producer = sigChecker.getOwnerId();
         Context.require(labelInfo.getProducer().equals(producer), "unauthorized producer");
@@ -267,12 +271,11 @@ public class PdsPolicy implements Label, Policy, Node {
         LabelInfo labelInfo = checkLabelId(label_id);
 
         var sigChecker = new SignatureChecker();
-        Context.require(sigChecker.verifySig(get_did_score(), owner_sign), "failed to verify owner_sign");
-        var expected = new Payload.Builder("add_policy")
+        verifySignature(sigChecker, owner_sign);
+        validatePayload(sigChecker, new Payload.Builder("add_policy")
                 .labelId(label_id)
                 .policyId(policy_id)
-                .build();
-        Context.require(sigChecker.validatePayload(expected), "failed to validate payload");
+                .build());
 
         String ownerId = sigChecker.getOwnerId();
         Context.require(labelInfo.checkOwner(ownerId), "You do not have permission.");
@@ -308,12 +311,11 @@ public class PdsPolicy implements Label, Policy, Node {
         LabelInfo labelInfo = checkLabelId(policyInfo.getLabel_id());
 
         var sigChecker = new SignatureChecker();
-        Context.require(sigChecker.verifySig(get_did_score(), owner_sign), "failed to verify owner_sign");
-        var expected = new Payload.Builder("update_policy")
+        verifySignature(sigChecker, owner_sign);
+        validatePayload(sigChecker, new Payload.Builder("update_policy")
                 .policyId(policy_id)
                 .baseHeight(policyInfo.getLast_updated())
-                .build();
-        Context.require(sigChecker.validatePayload(expected), "failed to validate payload");
+                .build());
 
         String ownerId = sigChecker.getOwnerId();
         Context.require(labelInfo.checkOwner(ownerId), "You do not have permission.");
