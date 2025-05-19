@@ -1,6 +1,8 @@
 package com.iconloop.score.pds;
 
 import com.parametacorp.util.EnumerableMap;
+import com.parametacorp.util.EnumerableSet;
+import score.DictDB;
 import score.ObjectReader;
 import score.ObjectWriter;
 
@@ -20,6 +22,7 @@ public class LabelInfo {
     private long revoked;
 
     private final EnumerableMap<String, DataInfo> dataMap;
+    private final EnumerableSet<String> policyIds;
 
     public LabelInfo(Builder builder) {
         this.label_id = builder.labelId;
@@ -34,6 +37,7 @@ public class LabelInfo {
         this.last_updated = Math.max(builder.lastUpdated, created);
 
         this.dataMap = new EnumerableMap<>(label_id, String.class, DataInfo.class);
+        this.policyIds = new EnumerableSet<>(label_id, String.class);
     }
 
     public String getLabel_id() {
@@ -159,10 +163,6 @@ public class LabelInfo {
         return this.owner.equals(owner);
     }
 
-    public boolean checkLastUpdated(BigInteger lastUpdated) {
-        return lastUpdated.longValue() >= last_updated;
-    }
-
     public boolean addData(DataInfo dataInfo) {
         var dataId = dataInfo.getData();
         // check duplicate first
@@ -175,11 +175,7 @@ public class LabelInfo {
 
     private static final int DEFAULT_PAGE_SIZE = 25;
 
-    public PageOfData getDataPage(int offset, int limit) {
-        int total = dataMap.length();
-        if (total == 0) {
-            return new PageOfData(0, 0, 0, new DataInfo[0]);
-        }
+    private int getStart(int offset, int total) {
         int start = Math.min(offset, total - 1);
         if (start < 0) {
             start = total + start;
@@ -187,8 +183,21 @@ public class LabelInfo {
                 start = 0;
             }
         }
-        limit = (limit > 0) ? limit : DEFAULT_PAGE_SIZE;
-        int size = Math.min(limit, total - start);
+        return start;
+    }
+
+    private int getSize(int start, int limit, int total) {
+        int size = (limit > 0) ? limit : DEFAULT_PAGE_SIZE;
+        return Math.min(size, total - start);
+    }
+
+    public PageOfData getDataPage(int offset, int limit) {
+        int total = dataMap.length();
+        if (total == 0) {
+            return new PageOfData(0, 0, 0, new DataInfo[0]);
+        }
+        int start = getStart(offset, total);
+        int size = getSize(start, limit, total);
         DataInfo[] infos = new DataInfo[size];
         for (int i = 0; i < size; i++) {
             var key = dataMap.getKey(start + i);
@@ -197,13 +206,23 @@ public class LabelInfo {
         return new PageOfData(start, size, total, infos);
     }
 
-    // TODO
-    public String[] getPolicies() {
-        return new String[0];
+    public void addPolicyId(String policyId) {
+        policyIds.add(policyId);
     }
 
-    // TODO
-    public void setPolicies(String[] policies) {
+    public PageOfPolicy getPoliciesPage(DictDB<String, PolicyInfo> policyMap, int offset, int limit) {
+        int total = policyIds.length();
+        if (total == 0) {
+            return new PageOfPolicy(0, 0, 0, new PolicyInfo[0]);
+        }
+        int start = getStart(offset, total);
+        int size = getSize(start, limit, total);
+        PolicyInfo[] infos = new PolicyInfo[size];
+        for (int i = 0; i < size; i++) {
+            var key = policyIds.at(start + i);
+            infos[i] = policyMap.get(key);
+        }
+        return new PageOfPolicy(start, size, total, infos);
     }
 
     public static class Builder {

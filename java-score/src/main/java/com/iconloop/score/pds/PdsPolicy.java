@@ -30,7 +30,6 @@ enum EventType {
 }
 
 public class PdsPolicy implements Label, Policy, Node {
-    private static final BigInteger ONE_YEAR = new BigInteger("31536000000000");
     private static final BigInteger ONE_ICX = new BigInteger("1000000000000000000");
 
     private final ArrayDB<String> peers = Context.newArrayDB("peers", String.class);
@@ -256,6 +255,12 @@ public class PdsPolicy implements Label, Policy, Node {
         return this.policyInfos.get(policy_id);
     }
 
+    private PolicyInfo checkPolicyId(String policy_id) {
+        PolicyInfo policyInfo = get_policy(policy_id);
+        Context.require(policyInfo != null, "invalid policy_id");
+        return policyInfo;
+    }
+
     @External
     public void add_policy(String policy_id,
                            String label_id,
@@ -264,51 +269,41 @@ public class PdsPolicy implements Label, Policy, Node {
                            BigInteger threshold,
                            String owner_sign,
                            @Optional BigInteger expire_at) {
-    }
+        Context.require(!policy_id.isEmpty(), "policy_id is empty");
+        Context.require(get_policy(policy_id) == null, "policy_id already exists");
+        LabelInfo labelInfo = checkLabelId(label_id);
 
-    public void add_policy(String policy_id,
-                           String label_id,
-                           String name,
-                           String consumer,
-                           BigInteger threshold,
-                           BigInteger proxy_number,
-                           @Optional String owner_did,
-                           @Optional byte[] owner_sign,
-                           @Optional String[] proxies,
-                           @Optional String expire_at) {
-        Context.require(!policy_id.isEmpty(), "Blank key is not allowed.");
-        Context.require(this.policyInfos.get(policy_id) == null, "It has already been added.");
+        var sigChecker = new SignatureChecker();
+        Context.require(sigChecker.verifySig(get_did_score(), owner_sign), "failed to verify owner_sign");
+        var expected = new Payload.Builder("add_policy")
+                .labelId(label_id)
+                .policyId(policy_id)
+                .build();
+        Context.require(sigChecker.validatePayload(expected), "failed to validate payload");
 
-        LabelInfo labelInfo = this.labelInfos.get(label_id);
-        Context.require(labelInfo != null, "Invalid request target(label).");
+        String ownerId = sigChecker.getOwnerId();
+        Context.require(labelInfo.checkOwner(ownerId), "You do not have permission.");
 
-        String owner = Context.getCaller().toString();
-        if (owner_did != null) {
-            DidMessage didMessage = getDidMessage(owner_did, Context.getCaller(), policy_id, "add_policy", BigInteger.ZERO, owner_sign);
-            owner = didMessage.did;
-            Context.require(policy_id.equals(didMessage.getTarget()), "Invalid Content(PolicyInfo) target.");
-        }
-        if (!labelInfo.checkOwner(owner)) {
-            Context.revert(101, "You do not have permission.");
-        }
+        BigInteger blockTimestamp = BigInteger.valueOf(Context.getBlockTimestamp());
+        BigInteger expireAt = (expire_at.signum() == 0) ? labelInfo.getExpire_at() : expire_at;
+        Context.require(expireAt.compareTo(blockTimestamp) > 0, "expire_at must be greater than blockTimestamp");
+        Context.require(expireAt.compareTo(labelInfo.getExpire_at()) <= 0, "expire_at must be less than equal to the label's expire_at");
 
-        String[] prePolicyList = labelInfo.getPolicies();
-        String[] newPolicyList = new String[prePolicyList.length + 1];
-        System.arraycopy(prePolicyList, 0, newPolicyList, 0, prePolicyList.length);
-        newPolicyList[prePolicyList.length] = policy_id;
-        labelInfo.setPolicies(newPolicyList);
+        var policyInfo = new PolicyInfo.Builder()
+                .policyId(policy_id)
+                .labelId(label_id)
+                .name(name)
+                .consumer(validateDid(consumer))
+                .threshold(threshold)
+                .expireAt(expireAt)
+                .created(Context.getBlockHeight())
+                .build();
 
-        BigInteger blockTimeStamp = new BigInteger(String.valueOf(Context.getBlockTimestamp()));
-        String expireAt =  (expire_at == null) ? String.valueOf(blockTimeStamp.add(ONE_YEAR)) : expire_at;
-
-        PolicyInfo policyInfo = new PolicyInfo(
-                policy_id, label_id, name, owner, consumer, threshold, proxy_number, proxies, String.valueOf(Context.getBlockTimestamp()), expireAt, null
-        );
+        labelInfo.addPolicyId(policy_id);
         this.policyInfos.set(policy_id, policyInfo);
-        this.labelInfos.set(label_id, labelInfo);
-        PDSEvent(EventType.AddPolicy.name(), policy_id, consumer, policyInfo.getLastUpdated());
+        PolicyAdded(policy_id, label_id, consumer);
 
-        BigInteger total = this.policyCount.getOrDefault(BigInteger.ZERO);
+        BigInteger total = get_policy_count();
         this.policyCount.set(total.add(BigInteger.ONE));
     }
 
@@ -316,112 +311,62 @@ public class PdsPolicy implements Label, Policy, Node {
     public void update_policy(String policy_id,
                               BigInteger expire_at,
                               String owner_sign) {
+        PolicyInfo policyInfo = checkPolicyId(policy_id);
+        LabelInfo labelInfo = checkLabelId(policyInfo.getLabel_id());
 
-    }
+        var sigChecker = new SignatureChecker();
+        Context.require(sigChecker.verifySig(get_did_score(), owner_sign), "failed to verify owner_sign");
+        var expected = new Payload.Builder("update_policy")
+                .policyId(policy_id)
+                .baseHeight(policyInfo.getLast_updated())
+                .build();
+        Context.require(sigChecker.validatePayload(expected), "failed to validate payload");
 
-    public void remove_policy(String policy_id, @Optional String owner_did, @Optional byte[] owner_sign) {
-        PolicyInfo policyInfo = this.policyInfos.get(policy_id);
-        Context.require(policyInfo != null, "Invalid request target(policy).");
+        String ownerId = sigChecker.getOwnerId();
+        Context.require(labelInfo.checkOwner(ownerId), "You do not have permission.");
 
-        // Verify policy owner
-        String owner = Context.getCaller().toString();
-        if (owner_did != null) {
-            DidMessage didMessage = getDidMessage(owner_did, Context.getCaller(), policy_id, "remove_policy", policyInfo.getLastUpdated(), owner_sign);
-            owner = didMessage.did;
-            Context.require(policyInfo.checkLastUpdated(didMessage.getLastUpdated()), "Invalid Content(PolicyInfo) lastUpdated.");
-            Context.require(policy_id.equals(didMessage.getTarget()), "Invalid Content(PolicyInfo) target.");
-        }
-        if (!policyInfo.checkOwner(owner)) {
-            Context.revert(101, "You do not have permission.");
-        }
+        // new expire_at can be any value within the label's expire_at.
+        // setting the new expire_at to zero means the policy will expire immediately.
+        Context.require(expire_at.compareTo(labelInfo.getExpire_at()) <= 0, "expire_at must be less than equal to the label's expire_at");
 
-        LabelInfo labelInfo = this.labelInfos.get(policyInfo.getLabelId());
-        // Verify label owner
-        if (!labelInfo.checkOwner(owner)) {
-            Context.revert(101, "You do not have permission.");
-        }
+        var attrs = new PolicyInfo.Builder()
+                .expireAt(expire_at);
+        attrs.lastUpdated(Context.getBlockHeight());
 
-        String[] prePolicyList = labelInfo.getPolicies();
-        if (prePolicyList.length > 0) {
-            String[] newPolicyList = new String[prePolicyList.length - 1];
-
-            int newIndex = 0;
-            for (String s : prePolicyList) {
-                if (!s.equals(policy_id)) {
-                    newPolicyList[newIndex] = s;
-                    newIndex++;
-                }
-            }
-            labelInfo.setPolicies(newPolicyList);
-
-            this.labelInfos.set(policyInfo.getLabelId(), labelInfo);
-            PDSEvent(EventType.RemovePolicy.name(), policy_id, policyInfo.getConsumer(), policyInfo.getLastUpdated());
-        }
-
-        this.policyInfos.set(policy_id, null);
-
-        BigInteger total = this.policyCount.getOrDefault(BigInteger.ZERO);
-        this.policyCount.set(total.subtract(BigInteger.ONE));
+        policyInfo.update(attrs);
+        this.policyInfos.set(policy_id, policyInfo);
+        PolicyUpdated(policy_id);
     }
 
     @External(readonly=true)
     public Map<String, Object> check_policy(String policy_id) {
-        return Map.of();
-    }
-
-    public Map<String, Object> check_policy(String policy_id,
-                                            @Optional String owner,
-                                            @Optional String consumer) {
-        PolicyInfo policyInfo = this.policyInfos.get(policy_id);
-        Context.require(policyInfo != null, "Invalid request target(policy).");
-        boolean checked = owner != null || consumer != null;
-
-        LabelInfo labelInfo = this.labelInfos.get(policyInfo.getLabelId());
-        Context.require(labelInfo != null, "Invalid request target(label).");
-
-        if (owner != null) {
-            if (!policyInfo.checkOwner(owner)) {
-                checked = false;
-            }
-
-            if (!labelInfo.checkOwner(owner)) {
-                checked = false;
-            }
-        }
-
-        if (consumer != null) {
-            if (!policyInfo.getConsumer().equals(consumer)) {
-                checked = false;
-            }
-        }
+        PolicyInfo policyInfo = checkPolicyId(policy_id);
+        LabelInfo labelInfo = checkLabelId(policyInfo.getLabel_id());
+        boolean checked = false;
 
         BigInteger labelExpireAt = labelInfo.getExpire_at();
-        BigInteger policyExpireAt = BigInteger.ZERO;
-        if (!policyInfo.getExpireAt().isEmpty()) {
-            policyExpireAt = new BigInteger(policyInfo.getExpireAt());
-        }
-
-        String expireAt = "";
-        if (labelExpireAt.compareTo(policyExpireAt) > 0) {
-            expireAt = policyExpireAt.toString();
-        } else {
-            expireAt = labelExpireAt.toString();
+        BigInteger policyExpireAt = policyInfo.getExpire_at();
+        BigInteger current = BigInteger.valueOf(Context.getBlockTimestamp());
+        if (current.compareTo(policyExpireAt) <= 0) {
+            // not expired: valid policy
+            checked = true;
         }
 
         return Map.ofEntries(
                 Map.entry("policy_id", policy_id),
-                Map.entry("label_id", policyInfo.getLabelId()),
-                Map.entry("name", policyInfo.getName()),
+                Map.entry("label_id", labelInfo.getLabel_id()),
                 Map.entry("checked", checked),
-                Map.entry("expire_at", expireAt)
+                Map.entry("expire_at", policyExpireAt),
+                Map.entry("label_expire_at", labelExpireAt)
         );
     }
 
     @External(readonly=true)
-    public Page<PolicyInfo> get_policies(String label_id,
-                                         BigInteger offset,
-                                         @Optional BigInteger limit) {
-        return null;
+    public PageOfPolicy get_policies(String label_id,
+                                     int offset,
+                                     @Optional int limit) {
+        var labelInfo = checkLabelId(label_id);
+        return labelInfo.getPoliciesPage(policyInfos, offset, limit);
     }
 
     @External(readonly=true)

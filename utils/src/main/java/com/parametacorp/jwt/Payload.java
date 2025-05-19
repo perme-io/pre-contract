@@ -56,6 +56,7 @@ public class Payload {
         private final String method;
         private String labelId;
         private String dataId;
+        private String policyId;
         private long baseHeight;
 
         public Builder(String method) {
@@ -72,6 +73,11 @@ public class Payload {
             return this;
         }
 
+        public Builder policyId(String policyId) {
+            this.policyId = policyId;
+            return this;
+        }
+
         public Builder baseHeight(long height) {
             this.baseHeight = height;
             return this;
@@ -81,6 +87,7 @@ public class Payload {
             JsonObject params = Json.object();
             addIfNotNull(params, "label_id", Json.value(labelId));
             addIfNotNull(params, "data_id", Json.value(dataId));
+            addIfNotNull(params, "policy_id", Json.value(policyId));
             if (baseHeight > 0) {
                 params.add("base_height", Json.value(baseHeight));
             }

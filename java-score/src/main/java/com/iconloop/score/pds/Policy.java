@@ -64,18 +64,18 @@ public interface Policy {
     Map<String, Object> check_policy(String policy_id);
 
     /**
-     * Retrieves a paginated list of policies associated with the given label ID.
+     * Retrieves a page of policies associated with the given label ID.
      *
      * @param label_id The label ID associated with the policies.
-     * @param offset The starting position of the policies to retrieve.
-     * @param limit (Optional) The maximum number of policies to retrieve.
-     *              If null, a default value or all remaining policies may be returned.
+     * @param offset The starting position (can be negative for end-relative indexing).
+     * @param limit (Optional) The maximum number of items to return.
+     *              If null, a default size or all remaining items may be returned.
      *
      * @return A paginated result containing the list of policies.
      */
-    Page<PolicyInfo> get_policies(String label_id,
-                                  BigInteger offset,
-                                  @Optional BigInteger limit);
+    PageOfPolicy get_policies(String label_id,
+                              int offset,
+                              @Optional int limit);
 
     /**
      * Retrieves the total count of policies that have been added.

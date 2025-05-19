@@ -1,56 +1,37 @@
 package com.iconloop.score.pds;
 
-import score.Context;
 import score.ObjectReader;
 import score.ObjectWriter;
 
 import java.math.BigInteger;
-import java.util.Map;
-
 
 public class PolicyInfo {
-    private final String policyId;
-    private final String labelId;
+    private final String policy_id;
+    private final String label_id;
     private final String name;
-    private final String owner;
     private final String consumer;
     private final BigInteger threshold;
-    private final BigInteger proxyNumber;
-    private final String[] proxies;
-    private final String created;
-    private final String expireAt;
-    private BigInteger lastUpdated;
+    private BigInteger expire_at;
+    private final long created;
+    private long last_updated;
 
-    public PolicyInfo(String policyId,
-                      String labelId,
-                      String name,
-                      String owner,
-                      String consumer,
-                      BigInteger threshold,
-                      BigInteger proxy_number,
-                      String[] proxies,
-                      String created,
-                      String expire_at,
-                      BigInteger lastUpdated) {
-        this.policyId = policyId;
-        this.labelId = labelId;
-        this.name = name;
-        this.owner = owner;
-        this.consumer = consumer;
-        this.threshold = threshold;
-        this.proxyNumber = proxy_number;
-        this.proxies = proxies;
-        this.created = created;
-        this.expireAt = expire_at;
-        this.lastUpdated = (lastUpdated != null) ? lastUpdated : BigInteger.valueOf(Context.getBlockTimestamp());
+    public PolicyInfo(Builder builder) {
+        this.policy_id = builder.policyId;
+        this.label_id = builder.labelId;
+        this.name = builder.name;
+        this.consumer = builder.consumer;
+        this.threshold = builder.threshold;
+        this.expire_at = builder.expireAt;
+        this.created = builder.created;
+        this.last_updated = Math.max(builder.lastUpdated, created);
     }
 
-    public boolean checkOwner(String owner) {
-        return this.owner.equals(owner);
+    public String getPolicy_id() {
+        return policy_id;
     }
 
-    public String getLabelId() {
-        return labelId;
+    public String getLabel_id() {
+        return label_id;
     }
 
     public String getName() {
@@ -61,66 +42,123 @@ public class PolicyInfo {
         return consumer;
     }
 
-    public String getExpireAt() {
-        return expireAt;
+    public BigInteger getThreshold() {
+        return threshold;
     }
 
-    public BigInteger getLastUpdated() {
-        return this.lastUpdated;
+    public BigInteger getExpire_at() {
+        return expire_at;
     }
 
-    public boolean checkLastUpdated(BigInteger lastUpdated) {
-        return this.lastUpdated.equals(lastUpdated);
+    public long getCreated() {
+        return created;
     }
 
-    public static void writeObject(ObjectWriter w, PolicyInfo t) {
-        String proxiesJsonString = Helper.StringListToJsonString(t.proxies);
-        w.beginList(11);
-        w.writeNullable(t.policyId);
-        w.writeNullable(t.labelId);
-        w.writeNullable(t.name);
-        w.writeNullable(t.owner);
-        w.writeNullable(t.consumer);
-        w.writeNullable(t.threshold);
-        w.writeNullable(t.proxyNumber);
-        w.writeNullable(proxiesJsonString);
-        w.writeNullable(t.created);
-        w.writeNullable(t.expireAt);
-        w.write(t.lastUpdated);
-        w.end();
+    public long getLast_updated() {
+        return last_updated;
+    }
+
+    @Override
+    public String toString() {
+        return "PolicyInfo{" +
+                "policy_id='" + policy_id + '\'' +
+                ", label_id='" + label_id + '\'' +
+                ", name='" + name + '\'' +
+                ", consumer='" + consumer + '\'' +
+                ", threshold=" + threshold +
+                ", expire_at=" + expire_at +
+                ", created=" + created +
+                ", last_updated=" + last_updated +
+                '}';
+    }
+
+    public static void writeObject(ObjectWriter w, PolicyInfo p) {
+        w.writeListOf(
+                p.policy_id,
+                p.label_id,
+                p.name,
+                p.consumer,
+                p.threshold,
+                p.expire_at,
+                p.created,
+                p.last_updated);
     }
 
     public static PolicyInfo readObject(ObjectReader r) {
         r.beginList();
-        PolicyInfo t = new PolicyInfo(
-                r.readNullable(String.class),
-                r.readNullable(String.class),
-                r.readNullable(String.class),
-                r.readNullable(String.class),
-                r.readNullable(String.class),
-                r.readNullable(BigInteger.class),
-                r.readNullable(BigInteger.class),
-                Helper.JsonStringToStringList("proxies", r.readNullable(String.class)),
-                r.readNullable(String.class),
-                r.readNullable(String.class),
-                r.readBigInteger());
+        PolicyInfo p = new Builder()
+                .policyId(r.readString())
+                .labelId(r.readString())
+                .name(r.readString())
+                .consumer(r.readString())
+                .threshold(r.readBigInteger())
+                .expireAt(r.readBigInteger())
+                .created(r.readLong())
+                .lastUpdated(r.readLong())
+                .build();
         r.end();
-        return t;
+        return p;
     }
 
-    public Map<String, Object> toMap() {
-        return Map.ofEntries(
-                Map.entry("policy_id", this.policyId),
-                Map.entry("label_id", this.labelId),
-                Map.entry("name", this.name),
-                Map.entry("owner", this.owner),
-                Map.entry("consumer", this.consumer),
-                Map.entry("threshold", this.threshold),
-                Map.entry("proxy_number", this.proxyNumber),
-                Map.entry("proxies", this.proxies),
-                Map.entry("created", this.created),
-                Map.entry("expireAt", this.expireAt),
-                Map.entry("last_updated", this.lastUpdated)
-        );
+    public void update(Builder attrs) {
+        if (attrs.expireAt != null) {
+            this.expire_at = attrs.expireAt;
+        }
+        this.last_updated = attrs.lastUpdated;
+    }
+
+    public static class Builder {
+        private String policyId;
+        private String labelId;
+        private String name;
+        private String consumer;
+        private BigInteger threshold;
+        private BigInteger expireAt;
+        private long created;
+        private long lastUpdated;
+
+        public Builder policyId(String policyId) {
+            this.policyId = policyId;
+            return this;
+        }
+
+        public Builder labelId(String labelId) {
+            this.labelId = labelId;
+            return this;
+        }
+
+        public Builder name(String name) {
+            this.name = name;
+            return this;
+        }
+
+        public Builder consumer(String consumer) {
+            this.consumer = consumer;
+            return this;
+        }
+
+        public Builder threshold(BigInteger threshold) {
+            this.threshold = threshold;
+            return this;
+        }
+
+        public Builder expireAt(BigInteger expireAt) {
+            this.expireAt = expireAt;
+            return this;
+        }
+
+        public Builder created(long created) {
+            this.created = created;
+            return this;
+        }
+
+        public Builder lastUpdated(long lastUpdated) {
+            this.lastUpdated = lastUpdated;
+            return this;
+        }
+
+        public PolicyInfo build() {
+            return new PolicyInfo(this);
+        }
     }
 }
