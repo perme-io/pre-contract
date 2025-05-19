@@ -148,14 +148,15 @@ public class PdsPolicy implements Label, Policy, Node {
         String ownerId = sigChecker.getOwnerId();
         Context.require(labelInfo.checkOwner(ownerId), "You do not have permission.");
 
-        // TODO: handle policies
+        // remove all data and policies associated with this label
+        labelInfo.removeDataAll();
+        var size = labelInfo.removePolicyAll(policyInfos);
+        this.policyCount.set(get_policy_count().subtract(BigInteger.valueOf(size)));
 
         labelInfo.revoke(Context.getBlockHeight());
         this.labelInfos.set(label_id, labelInfo);
         LabelRemoved(label_id);
-
-        BigInteger total = get_label_count();
-        this.labelCount.set(total.subtract(BigInteger.ONE));
+        this.labelCount.set(get_label_count().subtract(BigInteger.ONE));
     }
 
     @External

@@ -370,6 +370,7 @@ public class PolicyTest extends TestBase {
 
         // cleanup: remove label
         removeLabel(key1, labelId);
+        assertEquals(BigInteger.ZERO, policyScore.call(BigInteger.class, "get_policy_count"));
     }
 
     @Test

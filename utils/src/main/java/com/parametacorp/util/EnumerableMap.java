@@ -69,4 +69,12 @@ public class EnumerableMap<K, V> {
         values.set(key, null);
         keys.remove(key);
     }
+
+    public void removeAll() {
+        var last = keys.length() - 1;
+        for (int i = last; i >= 0; i--) {
+            var key = keys.at(i);
+            remove(key);
+        }
+    }
 }

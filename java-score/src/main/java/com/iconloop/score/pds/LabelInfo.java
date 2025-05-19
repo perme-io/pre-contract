@@ -173,6 +173,10 @@ public class LabelInfo {
         return true;
     }
 
+    public void removeDataAll() {
+        dataMap.removeAll();
+    }
+
     private static final int DEFAULT_PAGE_SIZE = 25;
 
     private int getStart(int offset, int total) {
@@ -208,6 +212,16 @@ public class LabelInfo {
 
     public void addPolicyId(String policyId) {
         policyIds.add(policyId);
+    }
+
+    public int removePolicyAll(DictDB<String, PolicyInfo> policyInfo) {
+        var size = policyIds.length();
+        for (int i = size - 1; i >= 0; i--) {
+            var key = policyIds.at(i);
+            policyIds.remove(key);
+            policyInfo.set(key, null);
+        }
+        return size;
     }
 
     public PageOfPolicy getPoliciesPage(DictDB<String, PolicyInfo> policyMap, int offset, int limit) {
