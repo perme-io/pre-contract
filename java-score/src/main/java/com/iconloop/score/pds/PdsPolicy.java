@@ -2,8 +2,8 @@ package com.iconloop.score.pds;
 
 import com.parametacorp.jwt.Payload;
 import com.parametacorp.util.Converter;
+import com.parametacorp.util.EnumerableMap;
 import score.Address;
-import score.ArrayDB;
 import score.Context;
 import score.DictDB;
 import score.VarDB;
@@ -14,7 +14,6 @@ import score.annotation.Payable;
 import scorex.util.StringTokenizer;
 
 import java.math.BigInteger;
-import java.util.List;
 import java.util.Map;
 
 enum EventType {
@@ -32,10 +31,9 @@ enum EventType {
 public class PdsPolicy implements Label, Policy, Node {
     private static final BigInteger ONE_ICX = new BigInteger("1000000000000000000");
 
-    private final ArrayDB<String> peers = Context.newArrayDB("peers", String.class);
     private final DictDB<String, LabelInfo> labelInfos = Context.newDictDB("labelInfos", LabelInfo.class);
-    private final DictDB<String, NodeInfo> nodeInfos = Context.newDictDB("nodeInfos", NodeInfo.class);
     private final DictDB<String, PolicyInfo> policyInfos = Context.newDictDB("policyInfos", PolicyInfo.class);
+    private final EnumerableMap<String, NodeInfo> nodeInfos = new EnumerableMap<>("nodeInfos", String.class, NodeInfo.class);
     private final VarDB<BigInteger> labelCount = Context.newVarDB("labelCount", BigInteger.class);
     private final VarDB<BigInteger> policyCount = Context.newVarDB("policyCount", BigInteger.class);
     private final VarDB<BigInteger> minStakeForServe = Context.newVarDB("minStakeForServe", BigInteger.class);
@@ -374,52 +372,37 @@ public class PdsPolicy implements Label, Policy, Node {
         return this.nodeInfos.get(peer_id);
     }
 
+    private NodeInfo checkPeerId(String peer_id) {
+        NodeInfo nodeInfo = get_node(peer_id);
+        Context.require(nodeInfo != null, "invalid peer_id");
+        Context.require(nodeInfo.checkOwner(Context.getCaller()), "invalid owner");
+        return nodeInfo;
+    }
+
     @External
     @Payable
     public void add_node(String peer_id,
                          String name,
                          String endpoint,
                          @Optional Address owner) {
+        Context.require(!peer_id.isEmpty(), "peer_id is empty");
+        Context.require(this.nodeInfos.get(peer_id) == null, "peer_id already exists");
 
-    }
-
-    public void add_node(String peer_id,
-                         @Optional String endpoint,
-                         @Optional String name,
-                         @Optional String comment,
-                         @Optional Address owner) {
-        Context.require(!peer_id.isEmpty(), "Blank key is not allowed.");
-        Context.require(this.nodeInfos.get(peer_id) == null, "It has already been added.");
+        BigInteger stake = Context.getValue();
+        BigInteger minStake = get_min_stake_value();
+        Context.require(stake.compareTo(ONE_ICX.multiply(minStake)) >= 0, "needs at least " + minStake + " ICX to add a node");
 
         Address ownerAddress = (owner == null) ? Context.getCaller() : owner;
-        BigInteger stake = this.minStakeForServe.getOrDefault(BigInteger.ZERO);
-
-        if (!stake.equals(BigInteger.ZERO)) {
-            // You need at least this.minStakeForServe(icx) to add a node.
-            Context.require(Context.getValue().compareTo(ONE_ICX.multiply(stake)) >= 0);
-            stake = Context.getValue();
-        }
-
-        NodeInfo nodeInfo = new NodeInfo(peer_id, name, endpoint, comment, String.valueOf(Context.getBlockTimestamp()), ownerAddress, stake, BigInteger.valueOf(0));
+        NodeInfo nodeInfo = new NodeInfo(peer_id, name, endpoint, ownerAddress, Context.getBlockHeight(), stake, BigInteger.ZERO);
         this.nodeInfos.set(peer_id, nodeInfo);
-
-        removeNode(peer_id);
-        this.peers.add(peer_id);
-        PDSEvent(EventType.AddNode.name(), peer_id, nodeInfo.getEndpoint(), BigInteger.ZERO);
+        NodeAdded(peer_id, ownerAddress, endpoint);
     }
 
     @External
     public void remove_node(String peer_id) {
-        NodeInfo nodeInfo = this.nodeInfos.get(peer_id);
-        Context.require(nodeInfo != null, "Invalid request target(node).");
-
-        if (!nodeInfo.checkOwner(Context.getCaller())) {
-            Context.revert(101, "You do not have permission.");
-        }
-
-        this.nodeInfos.set(peer_id, null);
-        removeNode(peer_id);
-        PDSEvent(EventType.RemoveNode.name(), peer_id, nodeInfo.getEndpoint(), BigInteger.ZERO);
+        checkPeerId(peer_id);
+        this.nodeInfos.remove(peer_id);
+        NodeRemoved(peer_id);
     }
 
     @External
@@ -428,65 +411,29 @@ public class PdsPolicy implements Label, Policy, Node {
                             @Optional Address owner,
                             @Optional String name,
                             @Optional String endpoint) {
+        NodeInfo nodeInfo = checkPeerId(peer_id);
 
-    }
-
-    public void update_node(String peer_id,
-                            @Optional String endpoint,
-                            @Optional String name,
-                            @Optional String comment,
-                            @Optional Address owner) {
-        NodeInfo nodeInfo = this.nodeInfos.get(peer_id);
-        Context.require(nodeInfo != null, "Invalid request target(node).");
-
-        if (!nodeInfo.checkOwner(Context.getCaller())) {
-            Context.revert(101, "You do not have permission.");
+        BigInteger stake = nodeInfo.getStake();
+        if (Context.getValue().signum() > 0) {
+            stake = stake.add(Context.getValue());
         }
+        BigInteger minStake = get_min_stake_value();
+        Context.require(stake.compareTo(ONE_ICX.multiply(minStake)) >= 0, "needs at least " + minStake + " ICX to update a node");
 
         Address ownerAddress = (owner == null) ? Context.getCaller() : owner;
-        BigInteger stake = this.minStakeForServe.getOrDefault(BigInteger.ZERO);
-
-        if (!stake.equals(BigInteger.ZERO)) {
-            BigInteger prevStake =nodeInfo.getStake();
-            BigInteger newStake = prevStake.add(Context.getValue());
-            Context.require(newStake.compareTo(ONE_ICX.multiply(stake)) >= 0);
-            stake = newStake;
-        }
-
-        nodeInfo.update(name, endpoint, comment, null, ownerAddress, stake, BigInteger.valueOf(0));
+        nodeInfo.update(name, endpoint, ownerAddress, stake, BigInteger.ZERO);
         this.nodeInfos.set(peer_id, nodeInfo);
-
-        removeNode(peer_id);
-        this.peers.add(peer_id);
-        PDSEvent(EventType.UpdateNode.name(), peer_id, nodeInfo.getEndpoint(), BigInteger.ZERO);
-    }
-
-    private void removeNode(String peer_id) {
-        if (!checkPeerExist(peer_id)) {
-            return;
-        }
-
-        String top = this.peers.pop();
-        if (!top.equals(peer_id)) {
-            for (int i = 0; i < this.peers.size(); i++) {
-                if (peer_id.equals(this.peers.get(i))) {
-                    this.peers.set(i, top);
-                    break;
-                }
-            }
-        }
+        NodeUpdated(peer_id, ownerAddress, endpoint);
     }
 
     @External(readonly=true)
-    public List<NodeInfo> all_nodes() {
-        NodeInfo[] allNode = new NodeInfo[this.peers.size()];
-
-        for (int i=0; i < this.peers.size(); i++) {
-            NodeInfo nodeInfo = this.nodeInfos.get(this.peers.get(i));
-            allNode[i] = nodeInfo;
+    public NodeInfo[] all_nodes() {
+        NodeInfo[] allNode = new NodeInfo[nodeInfos.length()];
+        for (int i = 0; i < allNode.length; i++) {
+            var key = nodeInfos.getKey(i);
+            allNode[i] = nodeInfos.get(key);
         }
-
-        return List.of(allNode);
+        return allNode;
     }
 
     @External(readonly=true)
@@ -497,16 +444,6 @@ public class PdsPolicy implements Label, Policy, Node {
     @External(readonly=true)
     public BigInteger get_policy_count() {
         return this.policyCount.getOrDefault(BigInteger.ZERO);
-    }
-
-    private boolean checkPeerExist(String peer_id) {
-        //TODO: iteration is not efficient. Consider to use a Map.
-        for (int i = 0; i < this.peers.size(); i++) {
-            if (peer_id.equals(this.peers.get(i))) {
-                return true;
-            }
-        }
-        return false;
     }
 
     // Verify secp256k1 recoverable signature
@@ -562,11 +499,11 @@ public class PdsPolicy implements Label, Policy, Node {
     @EventLog(indexed=1)
     public void PolicyUpdated(String policy_id) {}
 
-    @EventLog(indexed=2)
-    public void NodeAdded(String peer_id, Address owner) {}
+    @EventLog(indexed=1)
+    public void NodeAdded(String peer_id, Address owner, String endpoint) {}
 
-    @EventLog(indexed=2)
-    public void NodeUpdated(String peer_id, Address owner) {}
+    @EventLog(indexed=1)
+    public void NodeUpdated(String peer_id, Address owner, String endpoint) {}
 
     @EventLog(indexed=1)
     public void NodeRemoved(String peer_id) {}

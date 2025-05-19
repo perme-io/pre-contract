@@ -60,7 +60,7 @@ public interface Node {
      *
      * @return A list of all nodes. Each node is represented as a NodeInfo within the list.
      */
-    List<NodeInfo> all_nodes();
+    NodeInfo[] all_nodes();
 
     /**
      * Sets the minimum stake value required for serving as a node.
@@ -81,18 +81,20 @@ public interface Node {
      *
      * @param peer_id The unique identifier of the node that was added.
      * @param owner The owner address of the newly added node.
+     * @param endpoint The network endpoint of the newly added node.
      */
-    @EventLog(indexed=2)
-    void NodeAdded(String peer_id, Address owner);
+    @EventLog(indexed=1)
+    void NodeAdded(String peer_id, Address owner, String endpoint);
 
     /**
      * Notifies when the attributes of an existing node have been updated.
      *
      * @param peer_id The unique identifier of the node that was updated.
      * @param owner The updated owner of the node.
+     * @param endpoint The updated network endpoint of the node.
      */
-    @EventLog(indexed=2)
-    void NodeUpdated(String peer_id, Address owner);
+    @EventLog(indexed=1)
+    void NodeUpdated(String peer_id, Address owner, String endpoint);
 
     /**
      * Notifies when an existing node is removed from the system.

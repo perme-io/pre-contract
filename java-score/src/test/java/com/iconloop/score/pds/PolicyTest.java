@@ -342,4 +342,49 @@ public class PolicyTest extends TestBase {
         // cleanup: remove label
         removeLabel(key1, labelId);
     }
+
+    @Test
+    void nodeTest() {
+        // ensure there is no node
+        NodeInfo[] nodes = (NodeInfo[]) policyScore.call("all_nodes");
+        assertEquals(0, nodes.length);
+
+        // add node
+        var peerId = "peer_" + rand.nextInt(10000);
+        policyScore.invoke(owner, "add_node", peerId, "node0", "http://localhost:8080");
+        NodeInfo node = (NodeInfo) policyScore.call("get_node", peerId);
+        System.out.println(node);
+        nodes = (NodeInfo[]) policyScore.call("all_nodes");
+        assertEquals(1, nodes.length);
+
+        // Negative: try to add with the same peerId
+        assertThrows(UserRevertedException.class, () ->
+                policyScore.invoke(owner, "add_node", peerId, "node0", "http://localhost:8080"));
+
+        // change the min stake value
+        policyScore.invoke(owner, "set_min_stake_value", BigInteger.valueOf(100));
+        assertEquals(BigInteger.valueOf(100), policyScore.call(BigInteger.class, "get_min_stake_value"));
+
+        BigInteger ICX_100 = BigInteger.valueOf(100).multiply(ICX);
+        owner.addBalance(ICX_100.multiply(BigInteger.valueOf(5)));
+
+        // update node
+        var newEndpoint = "http://localhost:8081";
+        policyScore.invoke(owner, ICX_100, "update_node", peerId, null, null, newEndpoint);
+        NodeInfo node1 = (NodeInfo) policyScore.call("get_node", peerId);
+        System.out.println(node1);
+        assertEquals(newEndpoint, node1.getEndpoint());
+
+        // add more nodes
+        for (int i = 0; i < 4; i++) {
+            policyScore.invoke(owner, ICX_100, "add_node", "peer_test" + i, "node_" + i, "http://localhost:900" + i);
+        }
+        nodes = (NodeInfo[]) policyScore.call("all_nodes");
+        assertEquals(5, nodes.length);
+
+        // remove node
+        policyScore.invoke(owner, "remove_node", peerId);
+        nodes = (NodeInfo[]) policyScore.call("all_nodes");
+        assertEquals(4, nodes.length);
+    }
 }
