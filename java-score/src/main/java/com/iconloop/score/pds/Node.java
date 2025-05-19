@@ -5,7 +5,6 @@ import score.annotation.EventLog;
 import score.annotation.Optional;
 
 import java.math.BigInteger;
-import java.util.List;
 
 public interface Node {
     /**

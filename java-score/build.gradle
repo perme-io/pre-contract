@@ -21,7 +21,6 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.3'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.3'
 
-    testImplementation 'org.web3j:crypto:5.0.0'
     testImplementation 'foundation.icon:icon-sdk:2.5.2'
     testImplementation fileTree(dir: '../libs', include: 'icon-did-*.jar')
 }
