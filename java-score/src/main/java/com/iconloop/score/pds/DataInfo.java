@@ -28,6 +28,15 @@ public class DataInfo {
         return size;
     }
 
+    @Override
+    public String toString() {
+        return "DataInfo{" +
+                "data='" + data + '\'' +
+                ", name='" + name + '\'' +
+                ", size=" + size +
+                '}';
+    }
+
     public static void writeObject(ObjectWriter w, DataInfo d) {
         w.writeListOf(d.data, d.name, d.size);
     }

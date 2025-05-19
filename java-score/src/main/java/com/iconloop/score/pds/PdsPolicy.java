@@ -110,7 +110,7 @@ public class PdsPolicy implements Label, Policy, Node {
         Context.require(producerExpireAt.compareTo(blockTimestamp) > 0, "producer_expire_at must be greater than blockTimestamp");
         Context.require(producerExpireAt.compareTo(expire_at) <= 0, "producer_expire_at must be less than equal to expire_at");
 
-        var labelBuilder = new LabelInfo.Builder()
+        var labelInfo = new LabelInfo.Builder()
                 .labelId(label_id)
                 .owner(ownerId)
                 .name(name)
@@ -119,16 +119,18 @@ public class PdsPolicy implements Label, Policy, Node {
                 .category(category)
                 .producer(producerId)
                 .producerExpireAt(producerExpireAt)
-                .created(Context.getBlockHeight());
-
-        // TODO: handle data & data_size
-
-        var labelInfo = labelBuilder.build();
+                .created(Context.getBlockHeight())
+                .build();
         this.labelInfos.set(label_id, labelInfo);
         LabelAdded(label_id, ownerId, producerId);
 
         BigInteger total = get_label_count();
         this.labelCount.set(total.add(BigInteger.ONE));
+
+        // add data if provided
+        if (data != null) {
+            addData(data, name, data_size, labelInfo);
+        }
     }
 
     @External
@@ -223,9 +225,13 @@ public class PdsPolicy implements Label, Policy, Node {
         String producer = sigChecker.getOwnerId();
         Context.require(labelInfo.getProducer().equals(producer), "unauthorized producer");
 
+        addData(data, name, size, labelInfo);
+    }
+
+    private void addData(String data, String name, BigInteger size, LabelInfo labelInfo) {
         var dataInfo = new DataInfo(data, name, size);
         Context.require(labelInfo.addData(dataInfo), "data already exists");
-        LabelData(label_id, data);
+        LabelData(labelInfo.getLabel_id(), data);
     }
 
     @External(readonly=true)

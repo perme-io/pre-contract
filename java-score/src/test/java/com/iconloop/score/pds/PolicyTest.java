@@ -70,6 +70,7 @@ public class PolicyTest extends TestBase {
         private String dataId;
         private String category;
         private BigInteger expireAt;
+        private String dataOpt;
 
         public ParamsBuilder(DidKeyHolder signer, String method) {
             this.signer = signer;
@@ -116,6 +117,11 @@ public class PolicyTest extends TestBase {
             return this;
         }
 
+        public ParamsBuilder dataOpt(String dataOpt) {
+            this.dataOpt = dataOpt;
+            return this;
+        }
+
         public Object[] build() throws AlgorithmException {
             var pb = new Payload.Builder(method);
             if (labelId != null) {
@@ -140,7 +146,9 @@ public class PolicyTest extends TestBase {
                     return new Object[] {
                             labelId, "name_" + labelId, "<kid>#<publicKey>", timestamp.add(ONE_DAY), signature,
                             // Optional
-                            null, null, BigInteger.ZERO, null, BigInteger.ZERO
+                            null, null, BigInteger.ZERO,
+                            (dataOpt != null) ? dataOpt : null,
+                            (dataOpt != null) ? BigInteger.valueOf(1000) : BigInteger.ZERO,
                     };
                 case "remove_label":
                     return new Object[] {
@@ -218,6 +226,27 @@ public class PolicyTest extends TestBase {
         System.out.println(label);
         assertTrue(label.isRevoked());
         assertEquals(BigInteger.ZERO, policyScore.call(BigInteger.class, "get_label_count"));
+    }
+
+    @Test
+    void addLabelWithData() throws Exception {
+        // add label with data
+        String labelId = "label_" + rand.nextInt(10000);
+        String dataId = "data_" + rand.nextInt(10000);
+        policyScore.invoke(owner, "add_label",
+                new ParamsBuilder(key1, "add_label").labelId(labelId).dataOpt(dataId).build());
+        var label = (LabelInfo) policyScore.call("get_label", labelId);
+        System.out.println(label);
+
+        var page = (PageOfData) policyScore.call("get_data", labelId, 0, 0);
+        assertEquals(0, page.getOffset());
+        assertEquals(1, page.getSize());
+        assertEquals(1, page.getTotal());
+        assertEquals(1, page.getIds().length);
+        System.out.println(page);
+
+        // cleanup: remove label
+        removeLabel(key1, labelId);
     }
 
     @Test
