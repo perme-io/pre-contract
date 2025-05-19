@@ -1,0 +1,17 @@
+apply plugin: 'java-library'
+
+optimizedJar.enabled = false
+
+dependencies {
+    compileOnly 'foundation.icon:javaee-api:0.9.6'
+    implementation 'foundation.icon:javaee-scorex:0.5.4.1'
+    implementation 'com.github.sink772:minimal-json:0.9.7'
+
+    testImplementation 'foundation.icon:javaee-unittest:0.12.2'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.3'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.3'
+}
+
+test {
+    useJUnitPlatform()
+}

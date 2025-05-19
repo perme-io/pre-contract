@@ -1,9 +1,13 @@
+wrapper {
+    gradleVersion = '7.6.4'
+}
+
 buildscript {
     repositories {
         mavenCentral()
     }
     dependencies {
-        classpath 'foundation.icon:gradle-javaee-plugin:0.8.4'
+        classpath 'foundation.icon:gradle-javaee-plugin:0.8.5'
     }
 }
 
@@ -18,10 +22,5 @@ subprojects {
     java {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
-    }
-
-    // need to add this option to retrieve formal parameter names
-    compileJava {
-        options.compilerArgs += ['-parameters']
     }
 }

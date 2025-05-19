@@ -1,475 +1,436 @@
 package com.iconloop.score.pds;
 
-import score.*;
+import com.parametacorp.jwt.Payload;
+import com.parametacorp.util.Converter;
+import com.parametacorp.util.EnumerableMap;
+import score.Address;
+import score.Context;
+import score.DictDB;
+import score.VarDB;
 import score.annotation.EventLog;
 import score.annotation.External;
 import score.annotation.Optional;
 import score.annotation.Payable;
+import scorex.util.StringTokenizer;
 
 import java.math.BigInteger;
-import java.util.List;
 import java.util.Map;
 
-enum EventType {
-    AddLabel,
-    RemoveLabel,
-    UpdateLabel,
-    UpdateData,
-    AddPolicy,
-    RemovePolicy,
-    AddNode,
-    RemoveNode,
-    UpdateNode
-}
-
-public class PdsPolicy {
-    private static final BigInteger ONE_YEAR = new BigInteger("31536000000000");
+public class PdsPolicy implements Label, Policy, Node {
     private static final BigInteger ONE_ICX = new BigInteger("1000000000000000000");
 
-    private final ArrayDB<String> peers = Context.newArrayDB("peers", String.class);
-    private final DictDB<String, LabelInfo> labelInfos;
-    private final DictDB<String, NodeInfo> nodeInfos;
-    private final DictDB<String, PolicyInfo> policyInfos;
+    private final DictDB<String, LabelInfo> labelInfos = Context.newDictDB("labelInfos", LabelInfo.class);
+    private final DictDB<String, PolicyInfo> policyInfos = Context.newDictDB("policyInfos", PolicyInfo.class);
+    private final EnumerableMap<String, NodeInfo> nodeInfos = new EnumerableMap<>("nodeInfos", String.class, NodeInfo.class);
     private final VarDB<BigInteger> labelCount = Context.newVarDB("labelCount", BigInteger.class);
     private final VarDB<BigInteger> policyCount = Context.newVarDB("policyCount", BigInteger.class);
     private final VarDB<BigInteger> minStakeForServe = Context.newVarDB("minStakeForServe", BigInteger.class);
-    private final VarDB<Address> didSummaryScore = Context.newVarDB("didSummaryScore", Address.class);
+    private final VarDB<Address> didScore = Context.newVarDB("didScore", Address.class);
 
-    public PdsPolicy() {
-        this.labelInfos = Context.newDictDB("labelInfos", LabelInfo.class);
-        this.nodeInfos = Context.newDictDB("nodeInfos", NodeInfo.class);
-        this.policyInfos = Context.newDictDB("policyInfos", PolicyInfo.class);
-    }
-
-    @External()
-    public void set_did_summary_score(Address did_summary_score) {
-        Context.require(Context.getCaller().equals(Context.getOwner()), "Only owner can call this method.");
-        this.didSummaryScore.set(did_summary_score);
+    public PdsPolicy(Address did_score) {
+        this.didScore.set(did_score);
     }
 
     @External(readonly=true)
-    public Address get_did_summary_score() {
-        return this.didSummaryScore.getOrDefault(null);
+    public Address get_did_score() {
+        return this.didScore.get();
     }
 
-    @External()
+    @External
     public void set_min_stake_value(BigInteger min_stake_for_serve) {
         Context.require(Context.getCaller().equals(Context.getOwner()), "Only owner can call this method.");
         this.minStakeForServe.set(min_stake_for_serve);
     }
 
     @External(readonly=true)
-    public Map<String, Object> get_min_stake_value() {
-        return Map.ofEntries(
-                Map.entry("min_stake_for_serve", this.minStakeForServe.getOrDefault(BigInteger.valueOf(0)))
-        );
+    public BigInteger get_min_stake_value() {
+        return this.minStakeForServe.getOrDefault(BigInteger.ZERO);
     }
 
     @External(readonly=true)
-    public Map<String, Object> get_label(String label_id) {
-        LabelInfo labelInfo = this.labelInfos.get(label_id);
-        return labelInfo.toMap();
+    public LabelInfo get_label(String label_id) {
+        return this.labelInfos.get(label_id);
     }
 
-    @External()
+    private LabelInfo checkLabelId(String label_id) {
+        LabelInfo labelInfo = get_label(label_id);
+        Context.require(labelInfo != null, "invalid label_id");
+        Context.require(!labelInfo.isRevoked(), "label_id is revoked");
+        return labelInfo;
+    }
+
+    private String validateDid(String did) {
+        String[] tokens = new String[4];
+        StringTokenizer tokenizer = new StringTokenizer(did, ":");
+        for (int i = 0; i < tokens.length; i++) {
+            Context.require(tokenizer.hasMoreTokens(), "validateDid: need more tokens");
+            tokens[i] = tokenizer.nextToken();
+        }
+        Context.require(!tokenizer.hasMoreTokens(), "validateDid: should be no more tokens");
+        if ("did".equals(tokens[0]) && "icon".equals(tokens[1])) {
+            try {
+                byte[] nid = Converter.hexToBytes(tokens[2]);
+                byte[] idAndChecksum = Converter.hexToBytes(tokens[3]);
+                if (idAndChecksum.length == 24) {
+                    return did;
+                }
+            } catch (IllegalArgumentException ignored) {}
+        }
+        Context.revert("invalid did");
+        return null;
+    }
+
+    private void verifySignature(SignatureChecker sigChecker, String signature) {
+        Context.require(sigChecker.verifySig(get_did_score(), signature), "failed to verify signature");
+    }
+
+    private void validatePayload(SignatureChecker sigChecker, Payload expected) {
+        Context.require(sigChecker.validatePayload(expected), "failed to validate payload");
+    }
+
+    @External
     public void add_label(String label_id,
                           String name,
-                          @Optional String owner_did,
-                          @Optional byte[] owner_sign,
+                          String public_key,
+                          BigInteger expire_at,
+                          String owner_sign,
+                          @Optional String category,
                           @Optional String producer,
-                          @Optional String producer_expire_at,
-                          @Optional String expire_at) {
-        Context.require(!label_id.isEmpty(), "Blank key is not allowed.");
-        Context.require(this.labelInfos.get(label_id) == null, "It has already been added.");
+                          @Optional BigInteger producer_expire_at,
+                          @Optional String data,
+                          @Optional BigInteger data_size) {
+        Context.require(!label_id.isEmpty(), "label_id is empty");
+        Context.require(get_label(label_id) == null, "label_id already exists");
 
-        BigInteger blockTimeStamp = new BigInteger(String.valueOf(Context.getBlockTimestamp()));
-        String owner = Context.getCaller().toString();
-        if (owner_did != null) {
-            DidMessage didMessage = getDidMessage(owner_did, Context.getCaller(), label_id, "add_label", BigInteger.ZERO, owner_sign);
-            owner = didMessage.did;
-            Context.require(label_id.equals(didMessage.getTarget()), "Invalid Content(LabelInfo) target.");
-        }
+        var sigChecker = new SignatureChecker();
+        verifySignature(sigChecker, owner_sign);
+        validatePayload(sigChecker, new Payload.Builder("add_label")
+                .labelId(label_id)
+                .build());
 
-        String producerID = (producer == null) ? owner : producer;
-        String producerExpireAt =  (producer_expire_at == null) ? String.valueOf(blockTimeStamp.add(ONE_YEAR)) : producer_expire_at;
-        String expireAt =  (expire_at == null) ? String.valueOf(blockTimeStamp.add(ONE_YEAR)) : expire_at;
+        String ownerId = sigChecker.getOwnerId();
+        BigInteger blockTimestamp = BigInteger.valueOf(Context.getBlockTimestamp());
+        Context.require(expire_at.compareTo(blockTimestamp) > 0, "expire_at must be greater than blockTimestamp");
 
-        LabelInfo labelInfo = new LabelInfo(label_id, name, owner, producerID, producerExpireAt, "", "", null, String.valueOf(Context.getBlockTimestamp()), expireAt, null);
+        String producerId = (producer == null) ? ownerId : validateDid(producer);
+        BigInteger producerExpireAt = (producer_expire_at.signum() == 0) ? expire_at : producer_expire_at;
+        Context.require(producerExpireAt.compareTo(blockTimestamp) > 0, "producer_expire_at must be greater than blockTimestamp");
+        Context.require(producerExpireAt.compareTo(expire_at) <= 0, "producer_expire_at must be less than equal to expire_at");
+
+        var labelInfo = new LabelInfo.Builder()
+                .labelId(label_id)
+                .owner(ownerId)
+                .name(name)
+                .publicKey(public_key)
+                .expireAt(expire_at)
+                .category(category)
+                .producer(producerId)
+                .producerExpireAt(producerExpireAt)
+                .created(Context.getBlockHeight())
+                .build();
         this.labelInfos.set(label_id, labelInfo);
-        PDSEvent(EventType.AddLabel.name(), label_id, producerID, labelInfo.getLastUpdated());
+        LabelAdded(label_id, ownerId, producerId);
 
-        BigInteger total = this.labelCount.getOrDefault(BigInteger.ZERO);
+        BigInteger total = get_label_count();
         this.labelCount.set(total.add(BigInteger.ONE));
+
+        // add data if provided
+        if (data != null) {
+            addData(data, name, data_size, labelInfo);
+        }
     }
 
-    // TODO Add @Optional owner_did, If fail in did auth, message has did auth fail.
-    @External()
+    @External
     public void remove_label(String label_id,
-                             @Optional String owner_did,
-                             @Optional byte[] owner_sign) {
-        LabelInfo labelInfo = this.labelInfos.get(label_id);
-        Context.require(labelInfo != null, "Invalid request target(label).");
+                             String owner_sign) {
+        var labelInfo = checkLabelId(label_id);
 
-        // Verify owner
-        String owner = Context.getCaller().toString();
-        if (owner_did != null) {
-            DidMessage didMessage = getDidMessage(owner_did, Context.getCaller(), label_id, "remove_label", labelInfo.getLastUpdated(), owner_sign);
-            owner = didMessage.did;
-            Context.require(labelInfo.checkLastUpdated(didMessage.getLastUpdated()), "Invalid Content(LabelInfo) lastUpdated.");
-            Context.require(label_id.equals(didMessage.getTarget()), "Invalid Content(LabelInfo) target.");
-        }
-        if (!labelInfo.checkOwner(owner)) {
-            Context.revert(101, "You do not have permission.");
-        }
+        var sigChecker = new SignatureChecker();
+        verifySignature(sigChecker, owner_sign);
+        validatePayload(sigChecker, new Payload.Builder("remove_label")
+                .labelId(label_id)
+                .build());
 
-        String[] policyList = labelInfo.getPolicies();
+        String ownerId = sigChecker.getOwnerId();
+        Context.require(labelInfo.checkOwner(ownerId), "You do not have permission.");
 
-        for (String policyId : policyList) {
-            PolicyInfo policyInfo = this.policyInfos.get(policyId);
-            if (policyInfo != null) {
-                PDSEvent(EventType.RemovePolicy.name(), policyId, policyInfo.getConsumer(), policyInfo.getLastUpdated());
-                this.policyInfos.set(policyId, null);
-            }
-        }
+        // remove all data and policies associated with this label
+        labelInfo.removeDataAll();
+        var size = labelInfo.removePolicyAll(policyInfos);
+        this.policyCount.set(get_policy_count().subtract(BigInteger.valueOf(size)));
 
-        this.labelInfos.set(label_id, null);
-        PDSEvent(EventType.RemoveLabel.name(), label_id, labelInfo.getProducer(), labelInfo.getLastUpdated());
-
-        BigInteger total = this.labelCount.getOrDefault(BigInteger.ZERO);
-        this.labelCount.set(total.subtract(BigInteger.ONE));
+        labelInfo.revoke(Context.getBlockHeight());
+        this.labelInfos.set(label_id, labelInfo);
+        LabelRemoved(label_id);
+        this.labelCount.set(get_label_count().subtract(BigInteger.ONE));
     }
 
-    // TODO Add @Optional owner_did
-    @External()
+    @External
     public void update_label(String label_id,
-                             @Optional String owner_did,
-                             @Optional byte[] owner_sign,
+                             String owner_sign,
                              @Optional String name,
+                             @Optional BigInteger expire_at,
+                             @Optional String category,
                              @Optional String producer,
-                             @Optional String producer_expire_at,
-                             @Optional String expire_at) {
-        LabelInfo labelInfo = this.labelInfos.get(label_id);
-        Context.require(labelInfo != null, "Invalid request target(label).");
+                             @Optional BigInteger producer_expire_at) {
+        var labelInfo = checkLabelId(label_id);
 
-        // Verify owner
-        String owner = Context.getCaller().toString();
-        if (owner_did != null) {
-            DidMessage didMessage = getDidMessage(owner_did, Context.getCaller(), label_id, "update_label", labelInfo.getLastUpdated(), owner_sign);
-            owner = didMessage.did;
-            Context.require(labelInfo.checkLastUpdated(didMessage.getLastUpdated()), "Invalid Content(LabelInfo) lastUpdated.");
-            Context.require(label_id.equals(didMessage.getTarget()), "Invalid Content(LabelInfo) target.");
+        var sigChecker = new SignatureChecker();
+        verifySignature(sigChecker, owner_sign);
+        validatePayload(sigChecker, new Payload.Builder("update_label")
+                .labelId(label_id)
+                .baseHeight(labelInfo.getLast_updated())
+                .build());
+
+        String ownerId = sigChecker.getOwnerId();
+        Context.require(labelInfo.checkOwner(ownerId), "You do not have permission.");
+
+        var attrs = new LabelInfo.Builder();
+        if (name != null) {
+            attrs.name(name);
         }
-
-        if (!labelInfo.checkOwner(owner)) {
-            Context.revert(101, "You do not have permission.");
+        BigInteger blockTimestamp = BigInteger.valueOf(Context.getBlockTimestamp());
+        if (expire_at.signum() > 0) {
+            Context.require(expire_at.compareTo(blockTimestamp) > 0, "expire_at must be greater than blockTimestamp");
+            attrs.expireAt(expire_at);
         }
-
-        BigInteger blockTimeStamp = new BigInteger(String.valueOf(Context.getBlockTimestamp()));
-        String producerExpireAt = null;
-        String producerAddress = labelInfo.getProducer();
+        if (category != null) {
+            attrs.category(category);
+        }
         if (producer != null) {
-            producerExpireAt = (producer_expire_at == null) ? String.valueOf(blockTimeStamp.add(ONE_YEAR)) : producer_expire_at;
-            producerAddress = producer;
+            attrs.producer(validateDid(producer));
         }
+        if (producer_expire_at.signum() > 0) {
+            Context.require(producer_expire_at.compareTo(blockTimestamp) > 0, "producer_expire_at must be greater than blockTimestamp");
+            Context.require(producer_expire_at.compareTo(expire_at) <= 0, "producer_expire_at must be less than equal to expire_at");
+            attrs.producerExpireAt(producer_expire_at);
+        }
+        attrs.lastUpdated(Context.getBlockHeight());
 
-        labelInfo.update(name, null, producerAddress, producerExpireAt, null, null, null, null, expire_at);
+        labelInfo.update(attrs);
         this.labelInfos.set(label_id, labelInfo);
-        PDSEvent(EventType.UpdateLabel.name(), label_id, labelInfo.getProducer(), labelInfo.getLastUpdated());
+        LabelUpdated(label_id);
     }
 
-    @External()
-    public void update_data(String label_id,
-                            String data,
-                            @Optional String producer_did,
-                            @Optional byte[] producer_sign,
-                            @Optional String capsule) {
-        LabelInfo labelInfo = this.labelInfos.get(label_id);
-        Context.require(labelInfo != null, "Invalid request target(label).");
+    @External
+    public void add_data(String label_id,
+                         String data,
+                         String name,
+                         BigInteger size,
+                         String producer_sign) {
+        var labelInfo = checkLabelId(label_id);
 
-        // Verify producer
-        String producer = Context.getCaller().toString();
-        if (producer_did != null) {
-            DidMessage didMessage = getDidMessage(producer_did, Context.getCaller(), label_id, "update_data", labelInfo.getLastUpdated(), producer_sign);
-            producer = didMessage.did;
-            Context.require(labelInfo.checkLastUpdated(didMessage.getLastUpdated()), "Invalid Content(LabelInfo) lastUpdated.");
-            Context.require(label_id.equals(didMessage.getTarget()), "Invalid Content(LabelInfo) target.");
-        }
-        if (!labelInfo.getProducer().equals(producer)) {
-            Context.revert(101, "You do not have permission.");
-        }
+        var sigChecker = new SignatureChecker();
+        verifySignature(sigChecker, producer_sign);
+        validatePayload(sigChecker, new Payload.Builder("add_data")
+                .labelId(label_id)
+                .dataId(data)
+                .build());
 
-        labelInfo.update(null, null, null, null, capsule, data, null, null, null);
-        this.labelInfos.set(label_id, labelInfo);
-        PDSEvent(EventType.UpdateData.name(), label_id, labelInfo.getProducer(), labelInfo.getLastUpdated());
+        String producer = sigChecker.getOwnerId();
+        Context.require(labelInfo.getProducer().equals(producer), "unauthorized producer");
+
+        addData(data, name, size, labelInfo);
+    }
+
+    private void addData(String data, String name, BigInteger size, LabelInfo labelInfo) {
+        var dataInfo = new DataInfo(data, name, size);
+        Context.require(labelInfo.addData(dataInfo), "data already exists");
+        LabelData(labelInfo.getLabel_id(), data);
     }
 
     @External(readonly=true)
-    public Map<String, Object> get_policy(String policy_id) {
-        PolicyInfo policyInfo = this.policyInfos.get(policy_id);
-        return policyInfo.toMap();
+    public PageOfData get_data(String label_id,
+                               int offset,
+                               @Optional int limit) {
+        var labelInfo = checkLabelId(label_id);
+        return labelInfo.getDataPage(offset, limit);
     }
 
-    @External()
+    @External(readonly=true)
+    public PolicyInfo get_policy(String policy_id) {
+        return this.policyInfos.get(policy_id);
+    }
+
+    private PolicyInfo checkPolicyId(String policy_id) {
+        PolicyInfo policyInfo = get_policy(policy_id);
+        Context.require(policyInfo != null, "invalid policy_id");
+        return policyInfo;
+    }
+
+    @External
     public void add_policy(String policy_id,
                            String label_id,
                            String name,
                            String consumer,
                            BigInteger threshold,
-                           BigInteger proxy_number,
-                           @Optional String owner_did,
-                           @Optional byte[] owner_sign,
-                           @Optional String[] proxies,
-                           @Optional String expire_at) {
-        Context.require(!policy_id.isEmpty(), "Blank key is not allowed.");
-        Context.require(this.policyInfos.get(policy_id) == null, "It has already been added.");
+                           String owner_sign,
+                           @Optional BigInteger expire_at) {
+        Context.require(!policy_id.isEmpty(), "policy_id is empty");
+        Context.require(get_policy(policy_id) == null, "policy_id already exists");
+        LabelInfo labelInfo = checkLabelId(label_id);
 
-        LabelInfo labelInfo = this.labelInfos.get(label_id);
-        Context.require(labelInfo != null, "Invalid request target(label).");
+        var sigChecker = new SignatureChecker();
+        verifySignature(sigChecker, owner_sign);
+        validatePayload(sigChecker, new Payload.Builder("add_policy")
+                .labelId(label_id)
+                .policyId(policy_id)
+                .build());
 
-        String owner = Context.getCaller().toString();
-        if (owner_did != null) {
-            DidMessage didMessage = getDidMessage(owner_did, Context.getCaller(), policy_id, "add_policy", BigInteger.ZERO, owner_sign);
-            owner = didMessage.did;
-            Context.require(policy_id.equals(didMessage.getTarget()), "Invalid Content(PolicyInfo) target.");
-        }
-        if (!labelInfo.checkOwner(owner)) {
-            Context.revert(101, "You do not have permission.");
-        }
+        String ownerId = sigChecker.getOwnerId();
+        Context.require(labelInfo.checkOwner(ownerId), "You do not have permission.");
 
-        String[] prePolicyList = labelInfo.getPolicies();
-        String[] newPolicyList = new String[prePolicyList.length + 1];
-        System.arraycopy(prePolicyList, 0, newPolicyList, 0, prePolicyList.length);
-        newPolicyList[prePolicyList.length] = policy_id;
-        labelInfo.setPolicies(newPolicyList);
+        BigInteger blockTimestamp = BigInteger.valueOf(Context.getBlockTimestamp());
+        BigInteger expireAt = (expire_at.signum() == 0) ? labelInfo.getExpire_at() : expire_at;
+        Context.require(expireAt.compareTo(blockTimestamp) > 0, "expire_at must be greater than blockTimestamp");
+        Context.require(expireAt.compareTo(labelInfo.getExpire_at()) <= 0, "expire_at must be less than equal to the label's expire_at");
 
-        BigInteger blockTimeStamp = new BigInteger(String.valueOf(Context.getBlockTimestamp()));
-        String expireAt =  (expire_at == null) ? String.valueOf(blockTimeStamp.add(ONE_YEAR)) : expire_at;
+        var policyInfo = new PolicyInfo.Builder()
+                .policyId(policy_id)
+                .labelId(label_id)
+                .name(name)
+                .consumer(validateDid(consumer))
+                .threshold(threshold)
+                .expireAt(expireAt)
+                .created(Context.getBlockHeight())
+                .build();
 
-        PolicyInfo policyInfo = new PolicyInfo(
-                policy_id, label_id, name, owner, consumer, threshold, proxy_number, proxies, String.valueOf(Context.getBlockTimestamp()), expireAt, null
-        );
+        labelInfo.addPolicyId(policy_id);
         this.policyInfos.set(policy_id, policyInfo);
-        this.labelInfos.set(label_id, labelInfo);
-        PDSEvent(EventType.AddPolicy.name(), policy_id, consumer, policyInfo.getLastUpdated());
+        PolicyAdded(policy_id, label_id, consumer);
 
-        BigInteger total = this.policyCount.getOrDefault(BigInteger.ZERO);
+        BigInteger total = get_policy_count();
         this.policyCount.set(total.add(BigInteger.ONE));
     }
 
-    @External()
-    public void remove_policy(String policy_id, @Optional String owner_did, @Optional byte[] owner_sign) {
-        PolicyInfo policyInfo = this.policyInfos.get(policy_id);
-        Context.require(policyInfo != null, "Invalid request target(policy).");
+    @External
+    public void update_policy(String policy_id,
+                              BigInteger expire_at,
+                              String owner_sign) {
+        PolicyInfo policyInfo = checkPolicyId(policy_id);
+        LabelInfo labelInfo = checkLabelId(policyInfo.getLabel_id());
 
-        // Verify policy owner
-        String owner = Context.getCaller().toString();
-        if (owner_did != null) {
-            DidMessage didMessage = getDidMessage(owner_did, Context.getCaller(), policy_id, "remove_policy", policyInfo.getLastUpdated(), owner_sign);
-            owner = didMessage.did;
-            Context.require(policyInfo.checkLastUpdated(didMessage.getLastUpdated()), "Invalid Content(PolicyInfo) lastUpdated.");
-            Context.require(policy_id.equals(didMessage.getTarget()), "Invalid Content(PolicyInfo) target.");
-        }
-        if (!policyInfo.checkOwner(owner)) {
-            Context.revert(101, "You do not have permission.");
-        }
+        var sigChecker = new SignatureChecker();
+        verifySignature(sigChecker, owner_sign);
+        validatePayload(sigChecker, new Payload.Builder("update_policy")
+                .policyId(policy_id)
+                .baseHeight(policyInfo.getLast_updated())
+                .build());
 
-        LabelInfo labelInfo = this.labelInfos.get(policyInfo.getLabelId());
-        // Verify label owner
-        if (!labelInfo.checkOwner(owner)) {
-            Context.revert(101, "You do not have permission.");
-        }
+        String ownerId = sigChecker.getOwnerId();
+        Context.require(labelInfo.checkOwner(ownerId), "You do not have permission.");
 
-        String[] prePolicyList = labelInfo.getPolicies();
-        if (prePolicyList.length > 0) {
-            String[] newPolicyList = new String[prePolicyList.length - 1];
+        // new expire_at can be any value within the label's expire_at.
+        // setting the new expire_at to zero means the policy will expire immediately.
+        Context.require(expire_at.compareTo(labelInfo.getExpire_at()) <= 0, "expire_at must be less than equal to the label's expire_at");
 
-            int newIndex = 0;
-            for (String s : prePolicyList) {
-                if (!s.equals(policy_id)) {
-                    newPolicyList[newIndex] = s;
-                    newIndex++;
-                }
-            }
-            labelInfo.setPolicies(newPolicyList);
+        var attrs = new PolicyInfo.Builder()
+                .expireAt(expire_at);
+        attrs.lastUpdated(Context.getBlockHeight());
 
-            this.labelInfos.set(policyInfo.getLabelId(), labelInfo);
-            PDSEvent(EventType.RemovePolicy.name(), policy_id, policyInfo.getConsumer(), policyInfo.getLastUpdated());
-        }
-
-        this.policyInfos.set(policy_id, null);
-
-        BigInteger total = this.policyCount.getOrDefault(BigInteger.ZERO);
-        this.policyCount.set(total.subtract(BigInteger.ONE));
+        policyInfo.update(attrs);
+        this.policyInfos.set(policy_id, policyInfo);
+        PolicyUpdated(policy_id);
     }
 
     @External(readonly=true)
-    public Map<String, Object> check_policy(String policy_id,
-                                            @Optional String owner,
-                                            @Optional String consumer) {
-        PolicyInfo policyInfo = this.policyInfos.get(policy_id);
-        Context.require(policyInfo != null, "Invalid request target(policy).");
-        boolean checked = owner != null || consumer != null;
+    public Map<String, Object> check_policy(String policy_id) {
+        PolicyInfo policyInfo = checkPolicyId(policy_id);
+        LabelInfo labelInfo = checkLabelId(policyInfo.getLabel_id());
+        boolean checked = false;
 
-        LabelInfo labelInfo = this.labelInfos.get(policyInfo.getLabelId());
-        Context.require(labelInfo != null, "Invalid request target(label).");
-
-        if (owner != null) {
-            if (!policyInfo.checkOwner(owner)) {
-                checked = false;
-            }
-
-            if (!labelInfo.checkOwner(owner)) {
-                checked = false;
-            }
-        }
-
-        if (consumer != null) {
-            if (!policyInfo.getConsumer().equals(consumer)) {
-                checked = false;
-            }
-        }
-
-        BigInteger labelExpireAt = labelInfo.getExpireAt();
-        BigInteger policyExpireAt = BigInteger.ZERO;
-        if (!policyInfo.getExpireAt().isEmpty()) {
-            policyExpireAt = new BigInteger(policyInfo.getExpireAt());
-        }
-
-        String expireAt = "";
-        if (labelExpireAt.compareTo(policyExpireAt) > 0) {
-            expireAt = policyExpireAt.toString();
-        } else {
-            expireAt = labelExpireAt.toString();
+        BigInteger labelExpireAt = labelInfo.getExpire_at();
+        BigInteger policyExpireAt = policyInfo.getExpire_at();
+        BigInteger current = BigInteger.valueOf(Context.getBlockTimestamp());
+        if (current.compareTo(policyExpireAt) <= 0) {
+            // not expired: valid policy
+            checked = true;
         }
 
         return Map.ofEntries(
                 Map.entry("policy_id", policy_id),
-                Map.entry("label_id", policyInfo.getLabelId()),
-                Map.entry("name", policyInfo.getName()),
+                Map.entry("label_id", labelInfo.getLabel_id()),
                 Map.entry("checked", checked),
-                Map.entry("expire_at", expireAt)
+                Map.entry("expire_at", policyExpireAt),
+                Map.entry("label_expire_at", labelExpireAt)
         );
     }
 
     @External(readonly=true)
-    public Map<String, Object> get_node(String peer_id) {
-        NodeInfo nodeInfo = this.nodeInfos.get(peer_id);
-        return nodeInfo.toMap();
+    public PageOfPolicy get_policies(String label_id,
+                                     int offset,
+                                     @Optional int limit) {
+        var labelInfo = checkLabelId(label_id);
+        return labelInfo.getPoliciesPage(policyInfos, offset, limit);
     }
 
-    @External()
+    @External(readonly=true)
+    public NodeInfo get_node(String peer_id) {
+        return this.nodeInfos.get(peer_id);
+    }
+
+    private NodeInfo checkPeerId(String peer_id) {
+        NodeInfo nodeInfo = get_node(peer_id);
+        Context.require(nodeInfo != null, "invalid peer_id");
+        Context.require(nodeInfo.checkOwner(Context.getCaller()), "invalid owner");
+        return nodeInfo;
+    }
+
+    @External
     @Payable
     public void add_node(String peer_id,
-                         @Optional String endpoint,
-                         @Optional String name,
-                         @Optional String comment,
+                         String name,
+                         String endpoint,
                          @Optional Address owner) {
-        Context.require(!peer_id.isEmpty(), "Blank key is not allowed.");
-        Context.require(this.nodeInfos.get(peer_id) == null, "It has already been added.");
+        Context.require(!peer_id.isEmpty(), "peer_id is empty");
+        Context.require(this.nodeInfos.get(peer_id) == null, "peer_id already exists");
+
+        BigInteger stake = Context.getValue();
+        BigInteger minStake = get_min_stake_value();
+        Context.require(stake.compareTo(ONE_ICX.multiply(minStake)) >= 0, "needs at least " + minStake + " ICX to add a node");
 
         Address ownerAddress = (owner == null) ? Context.getCaller() : owner;
-        BigInteger stake = this.minStakeForServe.getOrDefault(BigInteger.ZERO);
-
-        if (!stake.equals(BigInteger.ZERO)) {
-            // You need at least this.minStakeForServe(icx) to add a node.
-            Context.require(Context.getValue().compareTo(ONE_ICX.multiply(stake)) >= 0);
-            stake = Context.getValue();
-        }
-
-        NodeInfo nodeInfo = new NodeInfo(peer_id, name, endpoint, comment, String.valueOf(Context.getBlockTimestamp()), ownerAddress, stake, BigInteger.valueOf(0));
+        NodeInfo nodeInfo = new NodeInfo(peer_id, name, endpoint, ownerAddress, Context.getBlockHeight(), stake, BigInteger.ZERO);
         this.nodeInfos.set(peer_id, nodeInfo);
-
-        removeNode(peer_id);
-        this.peers.add(peer_id);
-        PDSEvent(EventType.AddNode.name(), peer_id, nodeInfo.getEndpoint(), BigInteger.ZERO);
+        NodeAdded(peer_id, ownerAddress, endpoint);
     }
 
-    @External()
+    @External
     public void remove_node(String peer_id) {
-        NodeInfo nodeInfo = this.nodeInfos.get(peer_id);
-        Context.require(nodeInfo != null, "Invalid request target(node).");
-
-        if (!nodeInfo.checkOwner(Context.getCaller())) {
-            Context.revert(101, "You do not have permission.");
-        }
-
-        this.nodeInfos.set(peer_id, null);
-        removeNode(peer_id);
-        PDSEvent(EventType.RemoveNode.name(), peer_id, nodeInfo.getEndpoint(), BigInteger.ZERO);
+        checkPeerId(peer_id);
+        this.nodeInfos.remove(peer_id);
+        NodeRemoved(peer_id);
     }
 
-    @External()
+    @External
     @Payable
     public void update_node(String peer_id,
-                            @Optional String endpoint,
+                            @Optional Address owner,
                             @Optional String name,
-                            @Optional String comment,
-                            @Optional Address owner) {
-        NodeInfo nodeInfo = this.nodeInfos.get(peer_id);
-        Context.require(nodeInfo != null, "Invalid request target(node).");
+                            @Optional String endpoint) {
+        NodeInfo nodeInfo = checkPeerId(peer_id);
 
-        if (!nodeInfo.checkOwner(Context.getCaller())) {
-            Context.revert(101, "You do not have permission.");
+        BigInteger stake = nodeInfo.getStake();
+        if (Context.getValue().signum() > 0) {
+            stake = stake.add(Context.getValue());
         }
+        BigInteger minStake = get_min_stake_value();
+        Context.require(stake.compareTo(ONE_ICX.multiply(minStake)) >= 0, "needs at least " + minStake + " ICX to update a node");
 
         Address ownerAddress = (owner == null) ? Context.getCaller() : owner;
-        BigInteger stake = this.minStakeForServe.getOrDefault(BigInteger.ZERO);
-
-        if (!stake.equals(BigInteger.ZERO)) {
-            BigInteger prevStake =nodeInfo.getStake();
-            BigInteger newStake = prevStake.add(Context.getValue());
-            Context.require(newStake.compareTo(ONE_ICX.multiply(stake)) >= 0);
-            stake = newStake;
-        }
-
-        nodeInfo.update(name, endpoint, comment, null, ownerAddress, stake, BigInteger.valueOf(0));
+        nodeInfo.update(name, endpoint, ownerAddress, stake, BigInteger.ZERO);
         this.nodeInfos.set(peer_id, nodeInfo);
-
-        removeNode(peer_id);
-        this.peers.add(peer_id);
-        PDSEvent(EventType.UpdateNode.name(), peer_id, nodeInfo.getEndpoint(), BigInteger.ZERO);
+        NodeUpdated(peer_id, ownerAddress, endpoint);
     }
 
-    private void removeNode(String peer_id) {
-        if (!checkPeerExist(peer_id)) {
-            return;
+    @External(readonly=true)
+    public NodeInfo[] all_nodes() {
+        NodeInfo[] allNode = new NodeInfo[nodeInfos.length()];
+        for (int i = 0; i < allNode.length; i++) {
+            var key = nodeInfos.getKey(i);
+            allNode[i] = nodeInfos.get(key);
         }
-
-        String top = this.peers.pop();
-        if (!top.equals(peer_id)) {
-            for (int i = 0; i < this.peers.size(); i++) {
-                if (peer_id.equals(this.peers.get(i))) {
-                    this.peers.set(i, top);
-                    break;
-                }
-            }
-        }
-    }
-
-    @External()
-    public void reset__() {
-        // TODO 개발 과정에서 컨트랙트 리셋 용도로 사용하는 임시 함수, 운영을 위한 배포시에는 이 메소드는 전체 제거되어야 함.
-        // Check permission
-        Context.require(Context.getOwner().equals(Context.getCaller()), "You do not have permission.");
-
-        String peer_id;
-        int peer_count = this.peers.size();
-        for (int i = 0; i < peer_count; i++) {
-            peer_id = this.peers.pop();
-            this.nodeInfos.set(peer_id, null);
-        }
-    }
-
-    @External(readonly = true)
-    public List<Object> all_node() {
-        Object[] allNode = new Object[this.peers.size()];
-
-        for (int i=0; i < this.peers.size(); i++) {
-            NodeInfo nodeInfo = this.nodeInfos.get(this.peers.get(i));
-            allNode[i] = nodeInfo.toMap();
-        }
-
-        return List.of(allNode);
+        return allNode;
     }
 
     @External(readonly=true)
@@ -482,53 +443,30 @@ public class PdsPolicy {
         return this.policyCount.getOrDefault(BigInteger.ZERO);
     }
 
-    private boolean checkPeerExist(String peer_id) {
-        //TODO: iteration is not efficient. Consider to use a Map.
-        for (int i = 0; i < this.peers.size(); i++) {
-            if (peer_id.equals(this.peers.get(i))) {
-                return true;
-            }
-        }
-        return false;
-    }
+    @EventLog(indexed=3)
+    public void LabelAdded(String label_id, String owner, String producer) {}
 
-    // Verify secp256k1 recoverable signature
-    private boolean verifySign(DidMessage msg, byte[] sign) {
-        if (this.didSummaryScore.getOrDefault(null) == null) {
-            Context.revert(102, "No External SCORE to verify DID.");
-        }
+    @EventLog(indexed=1)
+    public void LabelRemoved(String label_id) {}
 
-        String publicKey = (String) Context.call(this.didSummaryScore.get(), "getPublicKey", msg.did, msg.kid);
-        byte[] recoveredKeyBytes = Context.recoverKey("ecdsa-secp256k1", msg.getHashedMessage(), sign, false);
-        String recoveredKey = new BigInteger(recoveredKeyBytes).toString(16);
+    @EventLog(indexed=1)
+    public void LabelUpdated(String label_id) {}
 
-//        System.out.println("publicKey(verifySign): " + publicKey);
-//        System.out.println("recoveredKey(verifySign): " + recoveredKey);
+    @EventLog(indexed=2)
+    public void LabelData(String label_id, String data) {}
 
-        return publicKey.equals(recoveredKey);
-    }
+    @EventLog(indexed=3)
+    public void PolicyAdded(String policy_id, String label_id, String consumer) {}
 
-    private DidMessage getDidMessage(String msg, Address from, String target, String method, BigInteger lastUpdated, byte[] sign) {
-        DidMessage message = DidMessage.parse(msg);
-        message.update(from, target, method, lastUpdated);
-        byte[] hashedMessage = Context.hash("keccak-256", message.getMessageForHash());
-        message.setHashedMessage(hashedMessage);
+    @EventLog(indexed=1)
+    public void PolicyUpdated(String policy_id) {}
 
-//        System.out.println("receivedMessage: " + msg);
-//        System.out.println("generatedMessage: " + message.getMessage());
-        Context.require(message.getMessage().equals(msg), "Invalid did message.");
-        Context.require(verifySign(message, sign), "Invalid did signature.");
-        return message;
-    }
+    @EventLog(indexed=1)
+    public void NodeAdded(String peer_id, Address owner, String endpoint) {}
 
-    @Payable
-    public void fallback() {
-        // just receive incoming funds
-    }
+    @EventLog(indexed=1)
+    public void NodeUpdated(String peer_id, Address owner, String endpoint) {}
 
-    /*
-     * Events
-     */
-    @EventLog
-    protected void PDSEvent(String event, String value1, String value2, BigInteger lastUpdated) {}
+    @EventLog(indexed=1)
+    public void NodeRemoved(String peer_id) {}
 }
