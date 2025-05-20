@@ -11,6 +11,8 @@ import foundation.icon.did.core.Algorithm;
 import foundation.icon.did.core.AlgorithmProvider;
 import foundation.icon.did.core.DidKeyHolder;
 import foundation.icon.did.exceptions.AlgorithmException;
+import foundation.icon.icx.crypto.IconKeys;
+import foundation.icon.icx.data.Bytes;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import score.UserRevertedException;
@@ -58,6 +60,13 @@ public class PolicyTest extends TestBase {
         byte[] buf = new byte[24];
         System.arraycopy(msgHash, 0, buf, 0, buf.length);
         return "did:icon:03:" + Converter.bytesToHex(buf);
+    }
+
+    private static String getPublicKeyHex(DidKeyHolder keyHolder) {
+        var kid = keyHolder.getKeyId();
+        var pkeyBytes = algorithm.privateKeyToByte(keyHolder.getPrivateKey());
+        var pubkey = IconKeys.getPublicKey(new Bytes(pkeyBytes), true).toHexString(false);
+        return kid + "#" + pubkey;
     }
 
     public static class ParamsBuilder {
@@ -151,7 +160,7 @@ public class PolicyTest extends TestBase {
             switch (method) {
                 case "add_label":
                     return new Object[] {
-                            labelId, "name_" + labelId, "<kid>#<publicKey>",
+                            labelId, "name_" + labelId, getPublicKeyHex(signer),
                             (expireAt != null) ? expireAt : timestamp.add(ONE_HOUR), signature,
                             // Optional
                             null, null, BigInteger.ZERO,

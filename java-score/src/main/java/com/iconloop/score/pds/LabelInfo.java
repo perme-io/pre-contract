@@ -12,7 +12,7 @@ public class LabelInfo {
     private final String label_id;
     private final String owner;
     private String name;
-    private String public_key;
+    private final String public_key;
     private BigInteger expire_at;
     private String category;
     private String producer;
