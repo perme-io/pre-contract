@@ -135,7 +135,7 @@ public class PdsPolicy implements Label, Policy, Node {
         this.labelCount.set(total.add(BigInteger.ONE));
 
         // add data if provided
-        if (data != null) {
+        if (data != null && data_size.signum() > 0) {
             addData(data, name, data_size, labelInfo);
         }
     }
@@ -190,9 +190,11 @@ public class PdsPolicy implements Label, Policy, Node {
             attrs.name(name);
         }
         BigInteger blockTimestamp = BigInteger.valueOf(Context.getBlockTimestamp());
+        var labelExpireAt = labelInfo.getExpire_at();
         if (expire_at.signum() > 0) {
             Context.require(expire_at.compareTo(blockTimestamp) > 0, "expire_at must be greater than blockTimestamp");
             attrs.expireAt(expire_at);
+            labelExpireAt = expire_at;
         }
         if (category != null) {
             attrs.category(category);
@@ -202,7 +204,7 @@ public class PdsPolicy implements Label, Policy, Node {
         }
         if (producer_expire_at.signum() > 0) {
             Context.require(producer_expire_at.compareTo(blockTimestamp) > 0, "producer_expire_at must be greater than blockTimestamp");
-            Context.require(producer_expire_at.compareTo(expire_at) <= 0, "producer_expire_at must be less than equal to expire_at");
+            Context.require(producer_expire_at.compareTo(labelExpireAt) <= 0, "producer_expire_at must be less than equal to expire_at");
             attrs.producerExpireAt(producer_expire_at);
         }
         attrs.lastUpdated(Context.getBlockHeight());
@@ -229,6 +231,11 @@ public class PdsPolicy implements Label, Policy, Node {
 
         String producer = sigChecker.getOwnerId();
         Context.require(labelInfo.getProducer().equals(producer), "unauthorized producer");
+
+        // check producer_expire_at
+        BigInteger blockTimestamp = BigInteger.valueOf(Context.getBlockTimestamp());
+        BigInteger producerExpireAt = labelInfo.getProducer_expire_at();
+        Context.require(producerExpireAt.compareTo(blockTimestamp) > 0, "producer_expire_at has expired");
 
         addData(data, name, size, labelInfo);
     }

@@ -23,7 +23,8 @@ import java.util.Random;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class PolicyTest extends TestBase {
-    private static final BigInteger ONE_DAY = BigInteger.valueOf(60 * 60 * 24 * 1_000_000L);
+    private static final BigInteger ONE_SECOND = BigInteger.valueOf(1_000_000L);
+    private static final BigInteger ONE_HOUR = BigInteger.valueOf(60 * 60).multiply(ONE_SECOND);
     private static final ServiceManager sm = getServiceManager();
     private static final Account owner = sm.createAccount();
     private static final Algorithm algorithm = AlgorithmProvider.create(AlgorithmProvider.Type.ES256K);
@@ -70,6 +71,7 @@ public class PolicyTest extends TestBase {
         private String dataId;
         private String category;
         private BigInteger expireAt;
+        private BigInteger producerExpireAt;
         private String dataOpt;
 
         public ParamsBuilder(DidKeyHolder signer, String method) {
@@ -117,6 +119,11 @@ public class PolicyTest extends TestBase {
             return this;
         }
 
+        public ParamsBuilder producerExpireAt(BigInteger expireAt) {
+            this.producerExpireAt = expireAt;
+            return this;
+        }
+
         public ParamsBuilder dataOpt(String dataOpt) {
             this.dataOpt = dataOpt;
             return this;
@@ -144,7 +151,8 @@ public class PolicyTest extends TestBase {
             switch (method) {
                 case "add_label":
                     return new Object[] {
-                            labelId, "name_" + labelId, "<kid>#<publicKey>", timestamp.add(ONE_DAY), signature,
+                            labelId, "name_" + labelId, "<kid>#<publicKey>",
+                            (expireAt != null) ? expireAt : timestamp.add(ONE_HOUR), signature,
                             // Optional
                             null, null, BigInteger.ZERO,
                             (dataOpt != null) ? dataOpt : null,
@@ -158,8 +166,10 @@ public class PolicyTest extends TestBase {
                     return new Object[] {
                             labelId, signature,
                             // Optional
-                            null, BigInteger.ZERO, (category != null) ? category : null,
-                            (producer != null) ? producer.getDid() : null, BigInteger.ZERO
+                            null, (expireAt != null) ? expireAt : BigInteger.ZERO,
+                            (category != null) ? category : null,
+                            (producer != null) ? producer.getDid() : null,
+                            (producerExpireAt != null) ? producerExpireAt : BigInteger.ZERO
                     };
                 case "add_data":
                     return new Object[] {
@@ -262,10 +272,17 @@ public class PolicyTest extends TestBase {
                 policyScore.invoke(owner, "add_data", new ParamsBuilder(key2, "add_data").labelId(labelId).dataId(cid).build()));
 
         // update producer to key2
+        var timestamp = BigInteger.valueOf(sm.getBlock().getTimestamp());
+        var twoMinutes = BigInteger.valueOf(60 * 2).multiply(ONE_SECOND);
         policyScore.invoke(owner, "update_label",
                 new ParamsBuilder(key1, "update_label").labelId(labelId)
                         .baseHeight(label.getLast_updated())
+                        .producerExpireAt(timestamp.add(twoMinutes))
                         .producer(key2).build());
+        label = (LabelInfo) policyScore.call("get_label", labelId);
+        System.out.println(label);
+        assertEquals(key2.getDid(), label.getProducer());
+        assertEquals(timestamp.add(twoMinutes), label.getProducer_expire_at());
 
         // now add_data should succeed
         policyScore.invoke(owner, "add_data", new ParamsBuilder(key2, "add_data").labelId(labelId).dataId(cid).build());
@@ -291,6 +308,12 @@ public class PolicyTest extends TestBase {
         assertEquals(11, page2.getSize());
         assertEquals(31, page2.getTotal());
         assertEquals(11, page2.getIds().length);
+
+        // Negative: add_data should fail if producer_expire_at has expired
+        sm.getBlock().increase(30);
+        assertThrows(UserRevertedException.class, () ->
+                policyScore.invoke(owner, "add_data", new ParamsBuilder(key2, "add_data")
+                        .labelId(labelId).dataId("producer_has_expired").build()));
 
         // cleanup: remove label
         removeLabel(key1, labelId);
