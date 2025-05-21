@@ -5,6 +5,9 @@ import com.eclipsesource.json.JsonObject;
 import com.eclipsesource.json.JsonValue;
 
 public class Payload {
+    static final String KEY_METHOD = "method";
+    static final String KEY_PARAM = "param";
+
     private final JsonObject payload;
 
     public Payload(JsonObject payload) {
@@ -15,9 +18,9 @@ public class Payload {
         if (actual == null) {
             return false;
         }
-        if (actual.get("method").asString().equals(payload.get("method").asString())) {
-            JsonObject expectedParams = payload.get("params").asObject();
-            JsonObject actualParams = actual.get("params").asObject();
+        if (actual.get(KEY_METHOD).asString().equals(payload.get(KEY_METHOD).asString())) {
+            JsonObject expectedParams = payload.get(KEY_PARAM).asObject();
+            JsonObject actualParams = actual.get(KEY_PARAM).asObject();
             if (expectedParams.size() != actualParams.size()) {
                 return false;
             }
@@ -93,8 +96,8 @@ public class Payload {
             }
 
             JsonObject payload = Json.object()
-                    .add("method", method)
-                    .add("params", params);
+                    .add(KEY_METHOD, method)
+                    .add(KEY_PARAM, params);
             return new Payload(payload);
         }
 
