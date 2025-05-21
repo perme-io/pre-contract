@@ -2,6 +2,7 @@ package com.iconloop.score.pds;
 
 import com.parametacorp.util.EnumerableMap;
 import com.parametacorp.util.EnumerableSet;
+import score.Context;
 import score.DictDB;
 import score.ObjectReader;
 import score.ObjectWriter;
@@ -159,8 +160,8 @@ public class LabelInfo {
         this.last_updated = attrs.lastUpdated;
     }
 
-    public boolean checkOwner(String owner) {
-        return this.owner.equals(owner);
+    public void checkOwnerOrThrow(String owner) {
+        Context.require(this.owner.equals(owner), "invalid owner");
     }
 
     public boolean addData(DataInfo dataInfo) {

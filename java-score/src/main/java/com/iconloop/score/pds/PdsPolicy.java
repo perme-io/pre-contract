@@ -108,12 +108,11 @@ public class PdsPolicy implements Label, Policy, Node {
         return null;
     }
 
-    private void verifySignature(SignatureChecker sigChecker, String signature) {
+    private String verifySignature(String signature, Payload expected) {
+        var sigChecker = new SignatureChecker();
         Context.require(sigChecker.verifySig(get_did_score(), signature), "failed to verify signature");
-    }
-
-    private void validatePayload(SignatureChecker sigChecker, Payload expected) {
         Context.require(sigChecker.validatePayload(expected), "failed to validate payload");
+        return sigChecker.getOwnerId();
     }
 
     private void validateExpireAt(BigInteger expireAt) {
@@ -135,13 +134,10 @@ public class PdsPolicy implements Label, Policy, Node {
         Context.require(!label_id.isEmpty(), "label_id is empty");
         Context.require(get_label(label_id) == null, "label_id already exists");
 
-        var sigChecker = new SignatureChecker();
-        verifySignature(sigChecker, owner_sign);
-        validatePayload(sigChecker, new Payload.Builder("add_label")
+        String ownerId = verifySignature(owner_sign, new Payload.Builder("add_label")
                 .labelId(label_id)
                 .build());
 
-        String ownerId = sigChecker.getOwnerId();
         BigInteger blockTimestamp = BigInteger.valueOf(Context.getBlockTimestamp());
         Context.require(expire_at.compareTo(blockTimestamp) > 0, "expire_at must be greater than blockTimestamp");
 
@@ -178,14 +174,10 @@ public class PdsPolicy implements Label, Policy, Node {
                              String owner_sign) {
         var labelInfo = checkLabelId(label_id);
 
-        var sigChecker = new SignatureChecker();
-        verifySignature(sigChecker, owner_sign);
-        validatePayload(sigChecker, new Payload.Builder("remove_label")
+        String ownerId = verifySignature(owner_sign, new Payload.Builder("remove_label")
                 .labelId(label_id)
                 .build());
-
-        String ownerId = sigChecker.getOwnerId();
-        Context.require(labelInfo.checkOwner(ownerId), "You do not have permission.");
+        labelInfo.checkOwnerOrThrow(ownerId);
 
         // remove all data and policies associated with this label
         var dataSize = labelInfo.removeDataAll();
@@ -213,15 +205,11 @@ public class PdsPolicy implements Label, Policy, Node {
                              @Optional BigInteger producer_expire_at) {
         var labelInfo = checkLabelId(label_id);
 
-        var sigChecker = new SignatureChecker();
-        verifySignature(sigChecker, owner_sign);
-        validatePayload(sigChecker, new Payload.Builder("update_label")
+        String ownerId = verifySignature(owner_sign, new Payload.Builder("update_label")
                 .labelId(label_id)
                 .baseHeight(labelInfo.getLast_updated())
                 .build());
-
-        String ownerId = sigChecker.getOwnerId();
-        Context.require(labelInfo.checkOwner(ownerId), "You do not have permission.");
+        labelInfo.checkOwnerOrThrow(ownerId);
 
         // check label expiration
         var labelExpireAt = labelInfo.getExpire_at();
@@ -265,14 +253,10 @@ public class PdsPolicy implements Label, Policy, Node {
                          String producer_sign) {
         var labelInfo = checkLabelId(label_id);
 
-        var sigChecker = new SignatureChecker();
-        verifySignature(sigChecker, producer_sign);
-        validatePayload(sigChecker, new Payload.Builder("add_data")
+        String producer = verifySignature(producer_sign, new Payload.Builder("add_data")
                 .labelId(label_id)
                 .dataId(data)
                 .build());
-
-        String producer = sigChecker.getOwnerId();
         Context.require(labelInfo.getProducer().equals(producer), "unauthorized producer");
 
         // check producer_expire_at
@@ -327,15 +311,11 @@ public class PdsPolicy implements Label, Policy, Node {
         Context.require(get_policy(policy_id) == null, "policy_id already exists");
         LabelInfo labelInfo = checkLabelId(label_id);
 
-        var sigChecker = new SignatureChecker();
-        verifySignature(sigChecker, owner_sign);
-        validatePayload(sigChecker, new Payload.Builder("add_policy")
+        String ownerId = verifySignature(owner_sign, new Payload.Builder("add_policy")
                 .labelId(label_id)
                 .policyId(policy_id)
                 .build());
-
-        String ownerId = sigChecker.getOwnerId();
-        Context.require(labelInfo.checkOwner(ownerId), "You do not have permission.");
+        labelInfo.checkOwnerOrThrow(ownerId);
 
         BigInteger blockTimestamp = BigInteger.valueOf(Context.getBlockTimestamp());
         BigInteger expireAt = (expire_at.signum() == 0) ? labelInfo.getExpire_at() : expire_at;
@@ -367,15 +347,11 @@ public class PdsPolicy implements Label, Policy, Node {
         PolicyInfo policyInfo = checkPolicyId(policy_id);
         LabelInfo labelInfo = checkLabelId(policyInfo.getLabel_id());
 
-        var sigChecker = new SignatureChecker();
-        verifySignature(sigChecker, owner_sign);
-        validatePayload(sigChecker, new Payload.Builder("update_policy")
+        String ownerId = verifySignature(owner_sign, new Payload.Builder("update_policy")
                 .policyId(policy_id)
                 .baseHeight(policyInfo.getLast_updated())
                 .build());
-
-        String ownerId = sigChecker.getOwnerId();
-        Context.require(labelInfo.checkOwner(ownerId), "You do not have permission.");
+        labelInfo.checkOwnerOrThrow(ownerId);
 
         // new expire_at can be any value within the label's expire_at.
         // setting the new expire_at to zero means the policy will expire immediately.
