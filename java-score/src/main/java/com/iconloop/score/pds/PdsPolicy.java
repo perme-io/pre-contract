@@ -26,14 +26,21 @@ public class PdsPolicy implements Label, Policy, Node {
     private final VarDB<BigInteger> policyCount = Context.newVarDB("policyCount", BigInteger.class);
     private final VarDB<BigInteger> minStakeForServe = Context.newVarDB("minStakeForServe", BigInteger.class);
     private final VarDB<Address> didScore = Context.newVarDB("didScore", Address.class);
+    private final VarDB<Address> bfsScore = Context.newVarDB("bfsScore", Address.class);
 
-    public PdsPolicy(Address did_score) {
+    public PdsPolicy(Address did_score, Address bfs_score) {
         this.didScore.set(did_score);
+        this.bfsScore.set(bfs_score);
     }
 
     @External(readonly=true)
     public Address get_did_score() {
         return this.didScore.get();
+    }
+
+    @External(readonly=true)
+    public Address get_bfs_score() {
+        return this.bfsScore.get();
     }
 
     @External
@@ -109,6 +116,11 @@ public class PdsPolicy implements Label, Policy, Node {
         Context.require(sigChecker.validatePayload(expected), "failed to validate payload");
     }
 
+    private void validateExpireAt(BigInteger expireAt) {
+        var blockTimestamp = BigInteger.valueOf(Context.getBlockTimestamp());
+        Context.require(expireAt.compareTo(blockTimestamp) > 0, "label or producer has expired");
+    }
+
     @External
     public void add_label(String label_id,
                           String name,
@@ -176,14 +188,19 @@ public class PdsPolicy implements Label, Policy, Node {
         Context.require(labelInfo.checkOwner(ownerId), "You do not have permission.");
 
         // remove all data and policies associated with this label
-        labelInfo.removeDataAll();
-        var size = labelInfo.removePolicyAll(policyInfos);
-        this.policyCount.set(get_policy_count().subtract(BigInteger.valueOf(size)));
+        var dataSize = labelInfo.removeDataAll();
+        var policySize = labelInfo.removePolicyAll(policyInfos);
+        this.policyCount.set(get_policy_count().subtract(BigInteger.valueOf(policySize)));
 
         labelInfo.revoke(Context.getBlockHeight());
         this.labelInfos.set(label_id, labelInfo);
         LabelRemoved(label_id);
         this.labelCount.set(get_label_count().subtract(BigInteger.ONE));
+
+        // revoke the group in bfs_score to unpin data
+        if (dataSize > 0) {
+            updateGroup(labelInfo.getLabel_id(), BigInteger.ONE);
+        }
     }
 
     @External
@@ -206,14 +223,16 @@ public class PdsPolicy implements Label, Policy, Node {
         String ownerId = sigChecker.getOwnerId();
         Context.require(labelInfo.checkOwner(ownerId), "You do not have permission.");
 
+        // check label expiration
+        var labelExpireAt = labelInfo.getExpire_at();
+        validateExpireAt(labelExpireAt);
+
         var attrs = new LabelInfo.Builder();
         if (name != null) {
             attrs.name(name);
         }
-        BigInteger blockTimestamp = BigInteger.valueOf(Context.getBlockTimestamp());
-        var labelExpireAt = labelInfo.getExpire_at();
-        if (expire_at.signum() > 0) {
-            Context.require(expire_at.compareTo(blockTimestamp) > 0, "expire_at must be greater than blockTimestamp");
+        var expireAtUpdated = (expire_at.signum() > 0);
+        if (expireAtUpdated) {
             attrs.expireAt(expire_at);
             labelExpireAt = expire_at;
         }
@@ -224,7 +243,6 @@ public class PdsPolicy implements Label, Policy, Node {
             attrs.producer(validateDid(producer));
         }
         if (producer_expire_at.signum() > 0) {
-            Context.require(producer_expire_at.compareTo(blockTimestamp) > 0, "producer_expire_at must be greater than blockTimestamp");
             Context.require(producer_expire_at.compareTo(labelExpireAt) <= 0, "producer_expire_at must be less than equal to expire_at");
             attrs.producerExpireAt(producer_expire_at);
         }
@@ -233,6 +251,10 @@ public class PdsPolicy implements Label, Policy, Node {
         labelInfo.update(attrs);
         this.labelInfos.set(label_id, labelInfo);
         LabelUpdated(label_id);
+
+        if (expireAtUpdated) {
+            updateGroup(labelInfo.getLabel_id(), labelExpireAt);
+        }
     }
 
     @External
@@ -254,9 +276,7 @@ public class PdsPolicy implements Label, Policy, Node {
         Context.require(labelInfo.getProducer().equals(producer), "unauthorized producer");
 
         // check producer_expire_at
-        BigInteger blockTimestamp = BigInteger.valueOf(Context.getBlockTimestamp());
-        BigInteger producerExpireAt = labelInfo.getProducer_expire_at();
-        Context.require(producerExpireAt.compareTo(blockTimestamp) > 0, "producer_expire_at has expired");
+        validateExpireAt(labelInfo.getProducer_expire_at());
 
         addData(data, name, size, labelInfo);
     }
@@ -265,6 +285,15 @@ public class PdsPolicy implements Label, Policy, Node {
         var dataInfo = new DataInfo(data, name, size);
         Context.require(labelInfo.addData(dataInfo), "data already exists");
         LabelData(labelInfo.getLabel_id(), data);
+
+        // pin data by calling bfs_score
+        Context.call(get_bfs_score(), "pin",
+                data, size, labelInfo.getExpire_at(), labelInfo.getLabel_id(), name);
+    }
+
+    private void updateGroup(String labelId, BigInteger expireAt) {
+        // update group expires at bfs_score
+        Context.call(get_bfs_score(), "update_group", labelId, expireAt);
     }
 
     @External(readonly=true)
@@ -370,7 +399,7 @@ public class PdsPolicy implements Label, Policy, Node {
         BigInteger labelExpireAt = labelInfo.getExpire_at();
         BigInteger policyExpireAt = policyInfo.getExpire_at();
         BigInteger current = BigInteger.valueOf(Context.getBlockTimestamp());
-        if (current.compareTo(policyExpireAt) <= 0) {
+        if (current.compareTo(policyExpireAt) < 0) {
             // not expired: valid policy
             checked = true;
         }

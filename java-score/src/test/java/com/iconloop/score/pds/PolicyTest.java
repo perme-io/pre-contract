@@ -31,6 +31,7 @@ public class PolicyTest extends TestBase {
     private static final Account owner = sm.createAccount();
     private static final Algorithm algorithm = AlgorithmProvider.create(AlgorithmProvider.Type.ES256K);
     private static Score didScore;
+    private static Score bfsScore;
     private static Score policyScore;
     private static DidKeyHolder key1;
     private static DidKeyHolder key2;
@@ -40,7 +41,8 @@ public class PolicyTest extends TestBase {
     @BeforeAll
     static void beforeAll() throws Exception {
         didScore = sm.deploy(owner, DidScoreMock.class);
-        policyScore = sm.deploy(owner, PdsPolicy.class, didScore.getAddress());
+        bfsScore = sm.deploy(owner, BfsScoreMock.class);
+        policyScore = sm.deploy(owner, PdsPolicy.class, didScore.getAddress(), bfsScore.getAddress());
         key1 = createDidAndKeyHolder("key1");
         key2 = createDidAndKeyHolder("key2");
     }
@@ -262,10 +264,30 @@ public class PolicyTest extends TestBase {
         assertEquals(1, page.getSize());
         assertEquals(1, page.getTotal());
         assertEquals(1, page.getIds().length);
-        System.out.println(page);
+
+        // check pinInfo in bfs_score
+        var pinInfo = (String) bfsScore.call("get_pin", policyScore.getAddress().toString(), dataId);
+        assertNotNull(pinInfo);
+        assertEquals(BigInteger.ZERO, bfsScore.call("get_group", policyScore.getAddress().toString(), labelId));
+        System.out.println(pinInfo);
+
+        // updating label's expire_at should affect the pinInfo in bfs_score
+        var newExpireAt = label.getExpire_at().subtract(ONE_SECOND);
+        policyScore.invoke(owner, "update_label",
+                new ParamsBuilder(key1, "update_label").labelId(labelId)
+                        .baseHeight(label.getLast_updated())
+                        .expireAt(newExpireAt)
+                        .build());
+        var pinInfo2 = (String) bfsScore.call("get_pin", policyScore.getAddress().toString(), dataId);
+        assertNotNull(pinInfo2);
+        assertEquals(newExpireAt, bfsScore.call("get_group", policyScore.getAddress().toString(), labelId));
+        System.out.println(pinInfo2);
 
         // cleanup: remove label
         removeLabel(key1, labelId);
+
+        // group expires should be "1" after the label is revoked
+        assertEquals(BigInteger.ONE, bfsScore.call("get_group", policyScore.getAddress().toString(), labelId));
     }
 
     @Test

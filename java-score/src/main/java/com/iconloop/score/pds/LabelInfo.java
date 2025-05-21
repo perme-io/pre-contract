@@ -173,8 +173,10 @@ public class LabelInfo {
         return true;
     }
 
-    public void removeDataAll() {
+    public int removeDataAll() {
+        int size = dataMap.length();
         dataMap.removeAll();
+        return size;
     }
 
     private static final int DEFAULT_PAGE_SIZE = 25;
