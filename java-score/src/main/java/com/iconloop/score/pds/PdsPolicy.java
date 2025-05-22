@@ -87,27 +87,6 @@ public class PdsPolicy implements Label, Policy, Node {
         return null;
     }
 
-    private String validatePubkey(String pubkey) {
-        // <kid>#<publicKey>
-        String[] tokens = new String[2];
-        StringTokenizer tokenizer = new StringTokenizer(pubkey, "#");
-        for (int i = 0; i < tokens.length; i++) {
-            Context.require(tokenizer.hasMoreTokens(), "validatePubkey: need more tokens");
-            tokens[i] = tokenizer.nextToken();
-        }
-        Context.require(!tokenizer.hasMoreTokens(), "validatePubkey: should be no more tokens");
-        var kid = tokens[0];
-        var compressed = tokens[1];
-        try {
-            byte[] pubkeyBytes = Converter.hexToBytes(compressed);
-            if (pubkeyBytes.length == 33) {
-                return pubkey;
-            }
-        } catch (IllegalArgumentException ignored) {}
-        Context.revert("invalid pubkey");
-        return null;
-    }
-
     private String verifySignature(String signature, Payload expected) {
         var sigChecker = new SignatureChecker();
         Context.require(sigChecker.verifySig(get_did_score(), signature), "failed to verify signature");
@@ -150,7 +129,7 @@ public class PdsPolicy implements Label, Policy, Node {
                 .labelId(label_id)
                 .owner(ownerId)
                 .name(name)
-                .publicKey(validatePubkey(public_key))
+                .publicKey(public_key)
                 .expireAt(expire_at)
                 .category(category)
                 .producer(producerId)
