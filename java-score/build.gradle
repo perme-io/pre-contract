@@ -53,6 +53,8 @@ ext {
     if (rootProject.hasProperty('deployTarget')) {
         deployTarget = rootProject.property('deployTarget')
     }
+    didScore = getConfigOrDefault('didScore', 'DID_SCORE_ADDRESS', '<must_specify>')
+    bfsScore = getConfigOrDefault('bfsScore', 'BFS_SCORE_ADDRESS', '<must_specify>')
 }
 
 deployJar {
@@ -76,6 +78,8 @@ deployJar {
     keystore = rpcKsName
     password = rpcKsPass
     parameters {
+        arg('did_score', didScore)
+        arg('bfs_score', bfsScore)
     }
 }
 
