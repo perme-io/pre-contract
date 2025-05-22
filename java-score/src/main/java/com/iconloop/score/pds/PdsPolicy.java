@@ -354,12 +354,13 @@ public class PdsPolicy implements Label, Policy, Node {
         BigInteger labelExpireAt = labelInfo.getExpire_at();
         BigInteger policyExpireAt = policyInfo.getExpire_at();
         BigInteger current = BigInteger.valueOf(Context.getBlockTimestamp());
-        if (current.compareTo(policyExpireAt) < 0) {
+        if (current.compareTo(policyExpireAt) < 0 && current.compareTo(labelExpireAt) < 0) {
             // not expired: valid policy
             checked = true;
         }
 
         return Map.ofEntries(
+                Map.entry("owner", labelInfo.getOwner()),
                 Map.entry("policy_id", policy_id),
                 Map.entry("label_id", labelInfo.getLabel_id()),
                 Map.entry("checked", checked),
