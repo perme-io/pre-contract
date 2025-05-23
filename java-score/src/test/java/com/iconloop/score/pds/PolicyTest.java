@@ -84,6 +84,7 @@ public class PolicyTest extends TestBase {
         private BigInteger expireAt;
         private BigInteger producerExpireAt;
         private String dataOpt;
+        private BigInteger threshold;
 
         public ParamsBuilder(DidKeyHolder signer, String method) {
             this.signer = signer;
@@ -140,6 +141,11 @@ public class PolicyTest extends TestBase {
             return this;
         }
 
+        public ParamsBuilder threshold(BigInteger threshold) {
+            this.threshold = threshold;
+            return this;
+        }
+
         public Object[] build() throws AlgorithmException {
             var pb = new Payload.Builder(method);
             if (labelId != null) {
@@ -189,7 +195,8 @@ public class PolicyTest extends TestBase {
                 case "add_policy":
                     return new Object[] {
                             policyId, labelId, "name_" + policyId,
-                            (consumer != null) ? consumer.getDid() : null, BigInteger.TWO, signature,
+                            (consumer != null) ? consumer.getDid() : null,
+                            (threshold != null) ? threshold : BigInteger.ONE, signature,
                             // Optional
                             BigInteger.ZERO
                     };
@@ -357,14 +364,24 @@ public class PolicyTest extends TestBase {
         var label = (LabelInfo) policyScore.call("get_label", labelId);
         System.out.println(label);
 
+        // the default system threshold is 1
+        assertEquals(BigInteger.ONE, policyScore.call("get_system_threshold"));
+
+        // set the proper system threshold before invoking add_policy
+        var threshold = BigInteger.valueOf(4);
+        policyScore.invoke(owner, "set_system_threshold", threshold);
+        assertEquals(threshold, policyScore.call("get_system_threshold"));
+
         var policyId = "policy_" + rand.nextInt(10000);
         policyScore.invoke(owner, "add_policy",
                 new ParamsBuilder(key1, "add_policy").labelId(labelId)
-                        .policyId(policyId).consumer(key2).build());
+                        .policyId(policyId).consumer(key2)
+                        .threshold(threshold).build());
         var policy = (PolicyInfo) policyScore.call("get_policy", policyId);
         System.out.println(policy);
         assertEquals(key2.getDid(), policy.getConsumer());
         assertEquals(label.getExpire_at(), policy.getExpire_at());
+        assertEquals(threshold, policy.getThreshold());
         assertEquals(BigInteger.ONE, policyScore.call(BigInteger.class, "get_policy_count"));
 
         // ensure check_policy returns true
@@ -406,7 +423,8 @@ public class PolicyTest extends TestBase {
             var pid = "policy_test" + i;
             policyScore.invoke(owner, "add_policy",
                     new ParamsBuilder(key1, "add_policy").labelId(labelId)
-                            .policyId(pid).consumer(key2).build());
+                            .policyId(pid).consumer(key2)
+                            .threshold(threshold).build());
         }
         assertEquals(BigInteger.valueOf(31), policyScore.call(BigInteger.class, "get_policy_count"));
 

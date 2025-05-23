@@ -76,6 +76,20 @@ public interface Node {
     BigInteger get_min_stake_value();
 
     /**
+     * Sets the system threshold value.
+     *
+     * @param threshold The new threshold value to be set for the system.
+     */
+    void set_system_threshold(BigInteger threshold);
+
+    /**
+     * Retrieves the current system threshold value.
+     *
+     * @return The system threshold value as a BigInteger.
+     */
+    BigInteger get_system_threshold();
+
+    /**
      * Notifies when a new node is added to the system.
      *
      * @param peer_id The unique identifier of the node that was added.

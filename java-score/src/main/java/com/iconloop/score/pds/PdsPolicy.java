@@ -25,6 +25,7 @@ public class PdsPolicy implements Label, Policy, Node {
     private final VarDB<BigInteger> labelCount = Context.newVarDB("labelCount", BigInteger.class);
     private final VarDB<BigInteger> policyCount = Context.newVarDB("policyCount", BigInteger.class);
     private final VarDB<BigInteger> minStakeForServe = Context.newVarDB("minStakeForServe", BigInteger.class);
+    private final VarDB<BigInteger> systemThreshold = Context.newVarDB("systemThreshold", BigInteger.class);
     private final VarDB<Address> didScore = Context.newVarDB("didScore", Address.class);
     private final VarDB<Address> bfsScore = Context.newVarDB("bfsScore", Address.class);
 
@@ -43,15 +44,36 @@ public class PdsPolicy implements Label, Policy, Node {
         return this.bfsScore.get();
     }
 
+    private void onlyOwner() {
+        Context.require(Context.getCaller().equals(Context.getOwner()), "Only owner can call this method.");
+    }
+
     @External
     public void set_min_stake_value(BigInteger min_stake_for_serve) {
-        Context.require(Context.getCaller().equals(Context.getOwner()), "Only owner can call this method.");
+        onlyOwner();
+        Context.require(min_stake_for_serve.signum() > 0, "min_stake should be greater than 0");
         this.minStakeForServe.set(min_stake_for_serve);
     }
 
     @External(readonly=true)
     public BigInteger get_min_stake_value() {
         return this.minStakeForServe.getOrDefault(BigInteger.ZERO);
+    }
+
+    @External
+    public void set_system_threshold(BigInteger threshold) {
+        onlyOwner();
+        Context.require(threshold.signum() > 0, "threshold should be greater than 0");
+        this.systemThreshold.set(threshold);
+    }
+
+    @External(readonly=true)
+    public BigInteger get_system_threshold() {
+        return this.systemThreshold.getOrDefault(BigInteger.ONE);
+    }
+
+    private void validateThreshold(BigInteger threshold) {
+        Context.require(threshold.equals(get_system_threshold()), "threshold should be equal to the system threshold");
     }
 
     @External(readonly=true)
@@ -289,6 +311,7 @@ public class PdsPolicy implements Label, Policy, Node {
         Context.require(!policy_id.isEmpty(), "policy_id is empty");
         Context.require(get_policy(policy_id) == null, "policy_id already exists");
         LabelInfo labelInfo = checkLabelId(label_id);
+        validateThreshold(threshold);
 
         String ownerId = verifySignature(owner_sign, new Payload.Builder("add_policy")
                 .labelId(label_id)
