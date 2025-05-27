@@ -130,7 +130,7 @@ public class PdsPolicy implements Label, Policy, Node {
                           @Optional String category,
                           @Optional String producer,
                           @Optional BigInteger producer_expire_at,
-                          @Optional String data,
+                          @Optional String data_id,
                           @Optional BigInteger data_size) {
         Context.require(!label_id.isEmpty(), "label_id is empty");
         Context.require(get_label(label_id) == null, "label_id already exists");
@@ -165,8 +165,8 @@ public class PdsPolicy implements Label, Policy, Node {
         this.labelCount.set(total.add(BigInteger.ONE));
 
         // add data if provided
-        if (data != null && data_size.signum() > 0) {
-            addData(data, name, data_size, labelInfo);
+        if (data_id != null && data_size.signum() > 0) {
+            addData(data_id, name, data_size, labelInfo);
         }
     }
 
@@ -248,7 +248,7 @@ public class PdsPolicy implements Label, Policy, Node {
 
     @External
     public void add_data(String label_id,
-                         String data,
+                         String data_id,
                          String name,
                          BigInteger size,
                          String producer_sign) {
@@ -256,24 +256,24 @@ public class PdsPolicy implements Label, Policy, Node {
 
         String producer = verifySignature(producer_sign, new Payload.Builder("add_data")
                 .labelId(label_id)
-                .dataId(data)
+                .dataId(data_id)
                 .build());
         Context.require(labelInfo.getProducer().equals(producer), "unauthorized producer");
 
         // check producer_expire_at
         validateExpireAt(labelInfo.getProducer_expire_at());
 
-        addData(data, name, size, labelInfo);
+        addData(data_id, name, size, labelInfo);
     }
 
-    private void addData(String data, String name, BigInteger size, LabelInfo labelInfo) {
-        var dataInfo = new DataInfo(data, name, size);
+    private void addData(String dataId, String name, BigInteger size, LabelInfo labelInfo) {
+        var dataInfo = new DataInfo(dataId, name, size);
         Context.require(labelInfo.addData(dataInfo), "data already exists");
-        LabelData(labelInfo.getLabel_id(), data);
+        LabelData(labelInfo.getLabel_id(), dataId);
 
         // pin data by calling bfs_score
         Context.call(get_bfs_score(), "pin",
-                data, size, labelInfo.getExpire_at(), labelInfo.getLabel_id(), name);
+                dataId, size, labelInfo.getExpire_at(), labelInfo.getLabel_id(), name);
     }
 
     private void updateGroup(String labelId, BigInteger expireAt) {
@@ -282,9 +282,15 @@ public class PdsPolicy implements Label, Policy, Node {
     }
 
     @External(readonly=true)
-    public PageOfData get_data(String label_id,
-                               int offset,
-                               @Optional int limit) {
+    public DataInfo get_data(String label_id, String data_id) {
+        var labelInfo = checkLabelId(label_id);
+        return labelInfo.getData(data_id);
+    }
+
+    @External(readonly=true)
+    public PageOfData get_data_list(String label_id,
+                                    int offset,
+                                    @Optional int limit) {
         var labelInfo = checkLabelId(label_id);
         return labelInfo.getDataPage(offset, limit);
     }
@@ -393,9 +399,9 @@ public class PdsPolicy implements Label, Policy, Node {
     }
 
     @External(readonly=true)
-    public PageOfPolicy get_policies(String label_id,
-                                     int offset,
-                                     @Optional int limit) {
+    public PageOfPolicy get_policy_list(String label_id,
+                                        int offset,
+                                        @Optional int limit) {
         var labelInfo = checkLabelId(label_id);
         return labelInfo.getPoliciesPage(policyInfos, offset, limit);
     }
@@ -489,7 +495,7 @@ public class PdsPolicy implements Label, Policy, Node {
     public void LabelUpdated(String label_id) {}
 
     @EventLog(indexed=2)
-    public void LabelData(String label_id, String data) {}
+    public void LabelData(String label_id, String data_id) {}
 
     @EventLog(indexed=3)
     public void PolicyAdded(String policy_id, String label_id, String consumer) {}

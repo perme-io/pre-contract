@@ -165,13 +165,17 @@ public class LabelInfo {
     }
 
     public boolean addData(DataInfo dataInfo) {
-        var dataId = dataInfo.getData();
+        var dataId = dataInfo.getData_id();
         // check duplicate first
         if (dataMap.get(dataId) != null) {
             return false;
         }
         dataMap.set(dataId, dataInfo);
         return true;
+    }
+
+    public DataInfo getData(String dataId) {
+        return dataMap.get(dataId);
     }
 
     public int removeDataAll() {

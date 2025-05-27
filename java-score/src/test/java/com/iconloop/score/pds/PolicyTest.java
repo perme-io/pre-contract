@@ -266,11 +266,16 @@ public class PolicyTest extends TestBase {
         var label = (LabelInfo) policyScore.call("get_label", labelId);
         System.out.println(label);
 
-        var page = (PageOfData) policyScore.call("get_data", labelId, 0, 0);
+        var data = (DataInfo) policyScore.call("get_data", labelId, dataId);
+        assertEquals(dataId, data.getData_id());
+
+        var page = (PageOfData) policyScore.call("get_data_list", labelId, 0, 0);
         assertEquals(0, page.getOffset());
         assertEquals(1, page.getSize());
         assertEquals(1, page.getTotal());
         assertEquals(1, page.getIds().length);
+        var data2 = page.getIds()[0];
+        assertEquals(dataId, data2.getData_id());
 
         // check pinInfo in bfs_score
         var pinInfo = (String) bfsScore.call("get_pin", policyScore.getAddress().toString(), dataId);
@@ -335,13 +340,13 @@ public class PolicyTest extends TestBase {
             policyScore.invoke(owner, "add_data", new ParamsBuilder(key2, "add_data").labelId(labelId).dataId(dataId).build());
         }
 
-        var page = (PageOfData) policyScore.call("get_data", labelId, 0, 0);
+        var page = (PageOfData) policyScore.call("get_data_list", labelId, 0, 0);
         assertEquals(0, page.getOffset());
         assertEquals(25, page.getSize());
         assertEquals(31, page.getTotal());
         assertEquals(25, page.getIds().length);
 
-        var page2 = (PageOfData) policyScore.call("get_data", labelId, -11, 20);
+        var page2 = (PageOfData) policyScore.call("get_data_list", labelId, -11, 20);
         assertEquals(20, page2.getOffset());
         assertEquals(11, page2.getSize());
         assertEquals(31, page2.getTotal());
@@ -428,13 +433,13 @@ public class PolicyTest extends TestBase {
         }
         assertEquals(BigInteger.valueOf(31), policyScore.call(BigInteger.class, "get_policy_count"));
 
-        var page = (PageOfPolicy) policyScore.call("get_policies", labelId, 0, 0);
+        var page = (PageOfPolicy) policyScore.call("get_policy_list", labelId, 0, 0);
         assertEquals(0, page.getOffset());
         assertEquals(25, page.getSize());
         assertEquals(31, page.getTotal());
         assertEquals(25, page.getIds().length);
 
-        var page2 = (PageOfPolicy) policyScore.call("get_policies", labelId, -1, 1);
+        var page2 = (PageOfPolicy) policyScore.call("get_policy_list", labelId, -1, 1);
         assertEquals(30, page2.getOffset());
         assertEquals(1, page2.getSize());
         assertEquals(31, page2.getTotal());

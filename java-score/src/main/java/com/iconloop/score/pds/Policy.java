@@ -73,9 +73,9 @@ public interface Policy {
      *
      * @return A paginated result containing the list of policies.
      */
-    PageOfPolicy get_policies(String label_id,
-                              int offset,
-                              @Optional int limit);
+    PageOfPolicy get_policy_list(String label_id,
+                                 int offset,
+                                 @Optional int limit);
 
     /**
      * Retrieves the total count of policies that have been added.

@@ -17,7 +17,7 @@ public interface Label {
      * @param category (Optional) The category of the label.
      * @param producer (Optional) The producer associated with the label.
      * @param producer_expire_at (Optional) The expiration timestamp for the producer in microseconds.
-     * @param data (Optional) The cid of the content associated with the label.
+     * @param data_id (Optional) The cid of the content associated with the label.
      * @param data_size (Optional) The size of the data in bytes associated with the label.
      *
      * @implNote Must trigger the LabelAdded event when the label is added successfully.
@@ -31,7 +31,7 @@ public interface Label {
                    @Optional String category,
                    @Optional String producer,
                    @Optional BigInteger producer_expire_at,
-                   @Optional String data,
+                   @Optional String data_id,
                    @Optional BigInteger data_size);
 
     /**
@@ -89,7 +89,7 @@ public interface Label {
      * Adds data associated with a given label.
      *
      * @param label_id The ID of the label associated with the data.
-     * @param data The cid of the content.
+     * @param data_id The cid of the content.
      * @param name The arbitrary name for the data.
      * @param size The size of the data in bytes.
      * @param producer_sign The producer's signature authorizing the data addition.
@@ -98,10 +98,20 @@ public interface Label {
      * @see #LabelData(String, String)
      */
     void add_data(String label_id,
-                  String data,
+                  String data_id,
                   String name,
                   BigInteger size,
                   String producer_sign);
+
+    /**
+     * Retrieves the data associated with a specific label and data ID.
+     *
+     * @param label_id The label ID associated with the data.
+     * @param data_id The cid of the content to be retrieved.
+     * @return A DataInfo object containing the details of the specified data.
+     *         Returns null if the data is not found.
+     */
+    DataInfo get_data(String label_id, String data_id);
 
     /**
      * Retrieves a page of data associated with the given label ID.
@@ -113,9 +123,9 @@ public interface Label {
      *
      * @return A paginated result containing the list of data.
      */
-    PageOfData get_data(String label_id,
-                        int offset,
-                        @Optional int limit);
+    PageOfData get_data_list(String label_id,
+                             int offset,
+                             @Optional int limit);
 
     /**
      * Notifies when a new label is added.
@@ -147,8 +157,8 @@ public interface Label {
      * Notifies when data is associated with a specific label.
      *
      * @param label_id The ID of the label associated with the data.
-     * @param data The cid of the content.
+     * @param data_id The cid of the content.
      */
     @EventLog(indexed=2)
-    void LabelData(String label_id, String data);
+    void LabelData(String label_id, String data_id);
 }

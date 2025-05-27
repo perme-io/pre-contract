@@ -6,18 +6,18 @@ import score.ObjectWriter;
 import java.math.BigInteger;
 
 public class DataInfo {
-    private final String data;
+    private final String data_id;
     private final String name;
     private final BigInteger size;
 
-    public DataInfo(String data, String name, BigInteger size) {
-        this.data = data;
+    public DataInfo(String dataId, String name, BigInteger size) {
+        this.data_id = dataId;
         this.name = name;
         this.size = size;
     }
 
-    public String getData() {
-        return data;
+    public String getData_id() {
+        return data_id;
     }
 
     public String getName() {
@@ -31,14 +31,14 @@ public class DataInfo {
     @Override
     public String toString() {
         return "DataInfo{" +
-                "data='" + data + '\'' +
+                "data_id='" + data_id + '\'' +
                 ", name='" + name + '\'' +
                 ", size=" + size +
                 '}';
     }
 
     public static void writeObject(ObjectWriter w, DataInfo d) {
-        w.writeListOf(d.data, d.name, d.size);
+        w.writeListOf(d.data_id, d.name, d.size);
     }
 
     public static DataInfo readObject(ObjectReader r) {
