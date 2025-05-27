@@ -17,6 +17,7 @@ public class SignatureChecker {
         String kid = tokens[1];
 
         byte[] pubKey = Context.call(byte[].class, didScore, "getPublicKey", ownerId, kid);
+        Context.require(pubKey != null, "cannot find public key for " + ownerId + "#" + kid);
         if (jwt.verify(pubKey)) {
             this.payload = jwt.getPayload();
             return true;
