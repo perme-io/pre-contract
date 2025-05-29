@@ -33,8 +33,8 @@ public class PolicyTest extends TestBase {
     private static Score didScore;
     private static Score bfsScore;
     private static Score policyScore;
-    private static DidKeyHolder key1;
-    private static DidKeyHolder key2;
+    private static DidKeyHolder alice;
+    private static DidKeyHolder bob;
 
     private final Random rand = new Random();
 
@@ -43,8 +43,8 @@ public class PolicyTest extends TestBase {
         didScore = sm.deploy(owner, DidScoreMock.class);
         bfsScore = sm.deploy(owner, BfsScoreMock.class);
         policyScore = sm.deploy(owner, PdsPolicy.class, didScore.getAddress(), bfsScore.getAddress());
-        key1 = createDidAndKeyHolder("key1");
-        key2 = createDidAndKeyHolder("key2");
+        alice = createDidAndKeyHolder("key1");
+        bob = createDidAndKeyHolder("key2");
     }
 
     private static DidKeyHolder createDidAndKeyHolder(String kid) throws AlgorithmException {
@@ -222,18 +222,18 @@ public class PolicyTest extends TestBase {
     @Test
     void labelTest() throws Exception {
         // add label
-        var labelId = addRandomLabel(key1);
+        var labelId = addRandomLabel(alice);
         var label = (LabelInfo) policyScore.call("get_label", labelId);
         System.out.println(label);
         assertEquals(BigInteger.ONE, policyScore.call(BigInteger.class, "get_label_count"));
 
         // Negative: try to add with the same labelId
         assertThrows(UserRevertedException.class, () ->
-                policyScore.invoke(owner, "add_label", new ParamsBuilder(key1, "add_label").labelId(labelId).build()));
+                policyScore.invoke(owner, "add_label", new ParamsBuilder(alice, "add_label").labelId(labelId).build()));
 
         // update label
         policyScore.invoke(owner, "update_label",
-                new ParamsBuilder(key1, "update_label").labelId(labelId)
+                new ParamsBuilder(alice, "update_label").labelId(labelId)
                         .category("newCategory")
                         .baseHeight(label.getLast_updated()).build());
         label = (LabelInfo) policyScore.call("get_label", labelId);
@@ -243,13 +243,13 @@ public class PolicyTest extends TestBase {
         // Negative: try to update with an invalid baseHeight
         final long invalidBaseHeight = label.getLast_updated() - 1;
         assertThrows(UserRevertedException.class, () -> policyScore.invoke(owner, "update_label",
-                new ParamsBuilder(key1, "update_label").labelId(labelId).baseHeight(invalidBaseHeight).build()));
+                new ParamsBuilder(alice, "update_label").labelId(labelId).baseHeight(invalidBaseHeight).build()));
         final long invalidBaseHeight2 = sm.getBlock().getHeight() + 1;
         assertThrows(UserRevertedException.class, () -> policyScore.invoke(owner, "update_label",
-                new ParamsBuilder(key1, "update_label").labelId(labelId).baseHeight(invalidBaseHeight2).build()));
+                new ParamsBuilder(alice, "update_label").labelId(labelId).baseHeight(invalidBaseHeight2).build()));
 
         // remove label
-        removeLabel(key1, labelId);
+        removeLabel(alice, labelId);
         label = (LabelInfo) policyScore.call("get_label", labelId);
         System.out.println(label);
         assertTrue(label.isRevoked());
@@ -262,7 +262,7 @@ public class PolicyTest extends TestBase {
         String labelId = "label_" + rand.nextInt(10000);
         String dataId = "data_" + rand.nextInt(10000);
         policyScore.invoke(owner, "add_label",
-                new ParamsBuilder(key1, "add_label").labelId(labelId).dataOpt(dataId).build());
+                new ParamsBuilder(alice, "add_label").labelId(labelId).dataOpt(dataId).build());
         var label = (LabelInfo) policyScore.call("get_label", labelId);
         System.out.println(label);
 
@@ -286,7 +286,7 @@ public class PolicyTest extends TestBase {
         // updating label's expire_at should affect the pinInfo in bfs_score
         var newExpireAt = label.getExpire_at().subtract(ONE_SECOND);
         policyScore.invoke(owner, "update_label",
-                new ParamsBuilder(key1, "update_label").labelId(labelId)
+                new ParamsBuilder(alice, "update_label").labelId(labelId)
                         .baseHeight(label.getLast_updated())
                         .expireAt(newExpireAt)
                         .build());
@@ -296,7 +296,7 @@ public class PolicyTest extends TestBase {
         System.out.println(pinInfo2);
 
         // cleanup: remove label
-        removeLabel(key1, labelId);
+        removeLabel(alice, labelId);
 
         // group expires should be "1" after the label is revoked
         assertEquals(BigInteger.ONE, bfsScore.call("get_group", policyScore.getAddress().toString(), labelId));
@@ -305,39 +305,40 @@ public class PolicyTest extends TestBase {
     @Test
     void addDataTest() throws Exception {
         // add label
-        String labelId = addRandomLabel(key1);
+        String labelId = addRandomLabel(alice);
         var label = (LabelInfo) policyScore.call("get_label", labelId);
         System.out.println(label);
 
         // Negative: try to add data with the unauthorized producer
         String cid = "data_" + rand.nextInt(10000);
         assertThrows(UserRevertedException.class, () ->
-                policyScore.invoke(owner, "add_data", new ParamsBuilder(key2, "add_data").labelId(labelId).dataId(cid).build()));
+                policyScore.invoke(owner, "add_data", new ParamsBuilder(bob, "add_data").labelId(labelId).dataId(cid).build()));
 
-        // update producer to key2
+        // update producer to carol
+        DidKeyHolder carol = createDidAndKeyHolder("key3");
         var timestamp = BigInteger.valueOf(sm.getBlock().getTimestamp());
         var twoMinutes = BigInteger.valueOf(60 * 2).multiply(ONE_SECOND);
         policyScore.invoke(owner, "update_label",
-                new ParamsBuilder(key1, "update_label").labelId(labelId)
+                new ParamsBuilder(alice, "update_label").labelId(labelId)
                         .baseHeight(label.getLast_updated())
                         .producerExpireAt(timestamp.add(twoMinutes))
-                        .producer(key2).build());
+                        .producer(carol).build());
         label = (LabelInfo) policyScore.call("get_label", labelId);
         System.out.println(label);
-        assertEquals(key2.getDid(), label.getProducer());
+        assertEquals(carol.getDid(), label.getProducer());
         assertEquals(timestamp.add(twoMinutes), label.getProducer_expire_at());
 
         // now add_data should succeed
-        policyScore.invoke(owner, "add_data", new ParamsBuilder(key2, "add_data").labelId(labelId).dataId(cid).build());
+        policyScore.invoke(owner, "add_data", new ParamsBuilder(carol, "add_data").labelId(labelId).dataId(cid).build());
 
         // Negative: try to add data with the same cid
         assertThrows(UserRevertedException.class, () ->
-                policyScore.invoke(owner, "add_data", new ParamsBuilder(key2, "add_data").labelId(labelId).dataId(cid).build()));
+                policyScore.invoke(owner, "add_data", new ParamsBuilder(carol, "add_data").labelId(labelId).dataId(cid).build()));
 
         // add more data
         for (int i = 0; i < 30; i++) {
             var dataId = "data_test" + i;
-            policyScore.invoke(owner, "add_data", new ParamsBuilder(key2, "add_data").labelId(labelId).dataId(dataId).build());
+            policyScore.invoke(owner, "add_data", new ParamsBuilder(carol, "add_data").labelId(labelId).dataId(dataId).build());
         }
 
         var page = (PageOfData) policyScore.call("get_data_list", labelId, 0, 0);
@@ -355,17 +356,17 @@ public class PolicyTest extends TestBase {
         // Negative: add_data should fail if producer_expire_at has expired
         sm.getBlock().increase(30);
         assertThrows(UserRevertedException.class, () ->
-                policyScore.invoke(owner, "add_data", new ParamsBuilder(key2, "add_data")
+                policyScore.invoke(owner, "add_data", new ParamsBuilder(carol, "add_data")
                         .labelId(labelId).dataId("producer_has_expired").build()));
 
         // cleanup: remove label
-        removeLabel(key1, labelId);
+        removeLabel(alice, labelId);
     }
 
     @Test
     void policyTest() throws Exception {
         // add label
-        String labelId = addRandomLabel(key1);
+        String labelId = addRandomLabel(alice);
         var label = (LabelInfo) policyScore.call("get_label", labelId);
         System.out.println(label);
 
@@ -379,12 +380,12 @@ public class PolicyTest extends TestBase {
 
         var policyId = "policy_" + rand.nextInt(10000);
         policyScore.invoke(owner, "add_policy",
-                new ParamsBuilder(key1, "add_policy").labelId(labelId)
-                        .policyId(policyId).consumer(key2)
+                new ParamsBuilder(alice, "add_policy").labelId(labelId)
+                        .policyId(policyId).consumer(bob)
                         .threshold(threshold).build());
         var policy = (PolicyInfo) policyScore.call("get_policy", policyId);
         System.out.println(policy);
-        assertEquals(key2.getDid(), policy.getConsumer());
+        assertEquals(bob.getDid(), policy.getConsumer());
         assertEquals(label.getExpire_at(), policy.getExpire_at());
         assertEquals(threshold, policy.getThreshold());
         assertEquals(BigInteger.ONE, policyScore.call(BigInteger.class, "get_policy_count"));
@@ -397,12 +398,12 @@ public class PolicyTest extends TestBase {
         // Negative: try to add with the same policyId
         assertThrows(UserRevertedException.class, () ->
                 policyScore.invoke(owner, "add_policy",
-                        new ParamsBuilder(key1, "add_policy").labelId(labelId)
-                                .policyId(policyId).consumer(key2).build()));
+                        new ParamsBuilder(alice, "add_policy").labelId(labelId)
+                                .policyId(policyId).consumer(bob).build()));
 
         // update policy: revoke the policy
         policyScore.invoke(owner, "update_policy",
-                new ParamsBuilder(key1, "update_policy").policyId(policyId)
+                new ParamsBuilder(alice, "update_policy").policyId(policyId)
                         .baseHeight(policy.getLast_updated())
                         .expireAt(BigInteger.ZERO).build());
         policy = (PolicyInfo) policyScore.call("get_policy", policyId);
@@ -419,7 +420,7 @@ public class PolicyTest extends TestBase {
         var baseHeight = policy.getLast_updated();
         assertThrows(UserRevertedException.class, () ->
                 policyScore.invoke(owner, "update_policy",
-                        new ParamsBuilder(key1, "update_policy").policyId(policyId)
+                        new ParamsBuilder(alice, "update_policy").policyId(policyId)
                                 .baseHeight(baseHeight)
                                 .expireAt(invalidExpireAt).build()));
 
@@ -427,8 +428,8 @@ public class PolicyTest extends TestBase {
         for (int i = 0; i < 30; i++) {
             var pid = "policy_test" + i;
             policyScore.invoke(owner, "add_policy",
-                    new ParamsBuilder(key1, "add_policy").labelId(labelId)
-                            .policyId(pid).consumer(key2)
+                    new ParamsBuilder(alice, "add_policy").labelId(labelId)
+                            .policyId(pid).consumer(bob)
                             .threshold(threshold).build());
         }
         assertEquals(BigInteger.valueOf(31), policyScore.call(BigInteger.class, "get_policy_count"));
@@ -446,7 +447,7 @@ public class PolicyTest extends TestBase {
         assertEquals(1, page2.getIds().length);
 
         // cleanup: remove label
-        removeLabel(key1, labelId);
+        removeLabel(alice, labelId);
         assertEquals(BigInteger.ZERO, policyScore.call(BigInteger.class, "get_policy_count"));
     }
 
