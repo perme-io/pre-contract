@@ -1,5 +1,6 @@
 package com.iconloop.score.pds;
 
+import com.parametacorp.jwt.Jwt;
 import com.parametacorp.jwt.Payload;
 import com.parametacorp.util.Converter;
 import com.parametacorp.util.EnumerableMap;
@@ -11,7 +12,6 @@ import score.annotation.EventLog;
 import score.annotation.External;
 import score.annotation.Optional;
 import score.annotation.Payable;
-import scorex.util.StringTokenizer;
 
 import java.math.BigInteger;
 import java.util.Map;
@@ -89,13 +89,7 @@ public class PdsPolicy implements Label, Policy, Node {
     }
 
     private String validateDid(String did) {
-        String[] tokens = new String[4];
-        StringTokenizer tokenizer = new StringTokenizer(did, ":");
-        for (int i = 0; i < tokens.length; i++) {
-            Context.require(tokenizer.hasMoreTokens(), "validateDid: need more tokens");
-            tokens[i] = tokenizer.nextToken();
-        }
-        Context.require(!tokenizer.hasMoreTokens(), "validateDid: should be no more tokens");
+        String[] tokens = Jwt.validateTokens(did, 4, ":");
         if ("did".equals(tokens[0]) && "icon".equals(tokens[1])) {
             try {
                 byte[] nid = Converter.hexToBytes(tokens[2]);
@@ -111,16 +105,9 @@ public class PdsPolicy implements Label, Policy, Node {
 
     private byte[] getConsumerPubkey(String consumer) {
         // <did#kid>
-        String[] tokens = new String[2];
-        StringTokenizer tokenizer = new StringTokenizer(consumer, "#");
-        for (int i = 0; i < tokens.length; i++) {
-            Context.require(tokenizer.hasMoreTokens(), "validateConsumer: need more tokens");
-            tokens[i] = tokenizer.nextToken();
-        }
-        Context.require(!tokenizer.hasMoreTokens(), "validateConsumer: should be no more tokens");
+        String[] tokens = Jwt.validateTokens(consumer, 2, "#");
         var did = validateDid(tokens[0]);
         var kid = tokens[1];
-
         byte[] pubKey = Context.call(byte[].class, get_did_score(), "getPublicKey", did, kid);
         Context.require(pubKey != null, "cannot find public key for " + did + "#" + kid);
         return pubKey;

@@ -31,14 +31,19 @@ public class Jwt {
     private final String sig;
     private byte[] msgHash;
 
-    public Jwt(String jwt) {
-        String[] tokens = new String[3];
-        StringTokenizer tokenizer = new StringTokenizer(jwt, ".");
+    public static String[] validateTokens(String input, int expSize, String delimiter) {
+        String[] tokens = new String[expSize];
+        StringTokenizer tokenizer = new StringTokenizer(input, delimiter);
         for (int i = 0; i < tokens.length; i++) {
-            Context.require(tokenizer.hasMoreTokens(), "need more tokens");
+            Context.require(tokenizer.hasMoreTokens(), "insufficient tokens");
             tokens[i] = tokenizer.nextToken();
         }
-        Context.require(!tokenizer.hasMoreTokens(), "should be no more tokens");
+        Context.require(!tokenizer.hasMoreTokens(), "too many tokens");
+        return tokens;
+    }
+
+    public Jwt(String jwt) {
+        String[] tokens = validateTokens(jwt, 3, ".");
 
         // just hold each part as is so that it can be used for verifying later
         // it will be decoded on demand
@@ -75,14 +80,7 @@ public class Jwt {
         JsonValue kid = obj.get("kid");
         Context.require(kid != null, "kid not found");
 
-        String[] tokens = new String[2];
-        StringTokenizer tokenizer = new StringTokenizer(kid.asString(), "#");
-        for (int i = 0; i < tokens.length; i++) {
-            Context.require(tokenizer.hasMoreTokens(), "need more tokens");
-            tokens[i] = tokenizer.nextToken();
-        }
-        Context.require(!tokenizer.hasMoreTokens(), "should be no more tokens");
-        return tokens;
+        return validateTokens(kid.asString(), 2, "#");
     }
 
     public boolean verify(byte[] pubKey) {
