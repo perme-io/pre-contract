@@ -20,12 +20,18 @@ public class Converter {
     private static final char[] HEX_ARRAY = "0123456789abcdef".toCharArray();
 
     public static String bytesToHex(byte[] bytes) {
+        return (bytes != null)
+                ? bytesToHex(bytes, 0, bytes.length)
+                : null;
+    }
+
+    public static String bytesToHex(byte[] bytes, int offset, int length) {
         if (bytes == null) {
             return null;
         }
-        char[] hexChars = new char[bytes.length * 2];
-        for (int i = 0; i < bytes.length; i++) {
-            int v = bytes[i] & 0xFF;
+        char[] hexChars = new char[length * 2];
+        for (int i = 0; i < length; i++) {
+            int v = bytes[i + offset] & 0xFF;
             hexChars[i * 2] = HEX_ARRAY[v >>> 4];
             hexChars[i * 2 + 1] = HEX_ARRAY[v & 0x0F];
         }

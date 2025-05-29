@@ -109,6 +109,23 @@ public class PdsPolicy implements Label, Policy, Node {
         return null;
     }
 
+    private byte[] getConsumerPubkey(String consumer) {
+        // <did#kid>
+        String[] tokens = new String[2];
+        StringTokenizer tokenizer = new StringTokenizer(consumer, "#");
+        for (int i = 0; i < tokens.length; i++) {
+            Context.require(tokenizer.hasMoreTokens(), "validateConsumer: need more tokens");
+            tokens[i] = tokenizer.nextToken();
+        }
+        Context.require(!tokenizer.hasMoreTokens(), "validateConsumer: should be no more tokens");
+        var did = validateDid(tokens[0]);
+        var kid = tokens[1];
+
+        byte[] pubKey = Context.call(byte[].class, get_did_score(), "getPublicKey", did, kid);
+        Context.require(pubKey != null, "cannot find public key for " + did + "#" + kid);
+        return pubKey;
+    }
+
     private String verifySignature(String signature, Payload expected) {
         var sigChecker = new SignatureChecker();
         Context.require(sigChecker.verifySig(get_did_score(), signature), "failed to verify signature");
@@ -306,6 +323,20 @@ public class PdsPolicy implements Label, Policy, Node {
         return policyInfo;
     }
 
+    private String createPolicyId(String labelId, byte[] consumerPubkey) {
+        // Keccak-256(label_id + consumer_pubkey)[0:16]
+        var labelBytes = labelId.getBytes();
+        byte[] msgBytes = new byte[labelBytes.length + consumerPubkey.length];
+        System.arraycopy(labelBytes, 0, msgBytes, 0, labelBytes.length);
+        System.arraycopy(consumerPubkey, 0, msgBytes, labelBytes.length, consumerPubkey.length);
+        return Converter.bytesToHex(Context.hash("keccak-256", msgBytes), 0, 16);
+    }
+
+    private void validatePolicyId(String policyId, String labelId, byte[] consumerPubkey) {
+        var expected = createPolicyId(labelId, consumerPubkey);
+        Context.require(expected.equals(policyId), "invalid policy_id, expected=" + expected);
+    }
+
     @External
     public void add_policy(String policy_id,
                            String label_id,
@@ -317,6 +348,7 @@ public class PdsPolicy implements Label, Policy, Node {
         Context.require(!policy_id.isEmpty(), "policy_id is empty");
         Context.require(get_policy(policy_id) == null, "policy_id already exists");
         LabelInfo labelInfo = checkLabelId(label_id);
+        validatePolicyId(policy_id, label_id, getConsumerPubkey(consumer));
         validateThreshold(threshold);
 
         String ownerId = verifySignature(owner_sign, new Payload.Builder("add_policy")
@@ -334,7 +366,7 @@ public class PdsPolicy implements Label, Policy, Node {
                 .policyId(policy_id)
                 .labelId(label_id)
                 .name(name)
-                .consumer(validateDid(consumer))
+                .consumer(consumer)
                 .threshold(threshold)
                 .expireAt(expireAt)
                 .created(Context.getBlockHeight())

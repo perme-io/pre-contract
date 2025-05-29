@@ -71,6 +71,16 @@ public class PolicyTest extends TestBase {
         return kid + "#" + pubkey;
     }
 
+    private static String createPolicyId(String labelId, DidKeyHolder keyHolder) {
+        // Keccak-256(label_id + consumer_pubkey)[0:16]
+        var labelBytes = labelId.getBytes();
+        var consumerPubkey = (byte[]) didScore.call("getPublicKey", keyHolder.getDid(), keyHolder.getKeyId());
+        byte[] msgBytes = new byte[labelBytes.length + consumerPubkey.length];
+        System.arraycopy(labelBytes, 0, msgBytes, 0, labelBytes.length);
+        System.arraycopy(consumerPubkey, 0, msgBytes, labelBytes.length, consumerPubkey.length);
+        return Converter.bytesToHex(Crypto.hash("keccak-256", msgBytes), 0, 16);
+    }
+
     public static class ParamsBuilder {
         private final DidKeyHolder signer;
         private final String method;
@@ -195,7 +205,7 @@ public class PolicyTest extends TestBase {
                 case "add_policy":
                     return new Object[] {
                             policyId, labelId, "name_" + policyId,
-                            (consumer != null) ? consumer.getDid() : null,
+                            (consumer != null) ? consumer.getKid() : null,
                             (threshold != null) ? threshold : BigInteger.ONE, signature,
                             // Optional
                             BigInteger.ZERO
@@ -378,14 +388,14 @@ public class PolicyTest extends TestBase {
         policyScore.invoke(owner, "set_system_threshold", threshold);
         assertEquals(threshold, policyScore.call("get_system_threshold"));
 
-        var policyId = "policy_" + rand.nextInt(10000);
+        var policyId = createPolicyId(labelId, bob);
         policyScore.invoke(owner, "add_policy",
                 new ParamsBuilder(alice, "add_policy").labelId(labelId)
                         .policyId(policyId).consumer(bob)
                         .threshold(threshold).build());
         var policy = (PolicyInfo) policyScore.call("get_policy", policyId);
         System.out.println(policy);
-        assertEquals(bob.getDid(), policy.getConsumer());
+        assertEquals(bob.getKid(), policy.getConsumer());
         assertEquals(label.getExpire_at(), policy.getExpire_at());
         assertEquals(threshold, policy.getThreshold());
         assertEquals(BigInteger.ONE, policyScore.call(BigInteger.class, "get_policy_count"));
@@ -426,10 +436,11 @@ public class PolicyTest extends TestBase {
 
         // add more policies
         for (int i = 0; i < 30; i++) {
-            var pid = "policy_test" + i;
+            var consumer = createDidAndKeyHolder("key" + i);
+            var pid = createPolicyId(labelId, consumer);
             policyScore.invoke(owner, "add_policy",
                     new ParamsBuilder(alice, "add_policy").labelId(labelId)
-                            .policyId(pid).consumer(bob)
+                            .policyId(pid).consumer(consumer)
                             .threshold(threshold).build());
         }
         assertEquals(BigInteger.valueOf(31), policyScore.call(BigInteger.class, "get_policy_count"));
