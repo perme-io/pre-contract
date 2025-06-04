@@ -110,6 +110,14 @@ public class PdsPolicy implements Label, Policy, Node {
         var kid = tokens[1];
         byte[] pubKey = Context.call(byte[].class, get_did_score(), "getPublicKey", did, kid);
         Context.require(pubKey != null, "cannot find public key for " + did + "#" + kid);
+        if (pubKey.length == 65) {
+            byte[] ypoint = new byte[32];
+            System.arraycopy(pubKey, 33, ypoint, 0, 32);
+            byte[] compressed = new byte[33];
+            compressed[0] = (byte)(new BigInteger(ypoint).testBit(0) ? 3 : 2);
+            System.arraycopy(pubKey, 1, compressed, 1, 32);
+            return compressed;
+        }
         return pubKey;
     }
 
