@@ -48,8 +48,18 @@ public class PolicyTest extends TestBase {
     }
 
     private static DidKeyHolder createDidAndKeyHolder(String kid) throws AlgorithmException {
+        return createDidAndKeyHolder(kid, false);
+    }
+
+    private static DidKeyHolder createDidAndKeyHolder(String kid, boolean compressed) throws AlgorithmException {
         var keyProvider = algorithm.generateKeyProvider(kid);
-        var pubkey = algorithm.publicKeyToByte(keyProvider.getPublicKey());
+        byte[] pubkey;
+        if (compressed) {
+            var pkeyBytes = algorithm.privateKeyToByte(keyProvider.getPrivateKey());
+            pubkey = IconKeys.getPublicKey(new Bytes(pkeyBytes), true).toByteArray();
+        } else {
+            pubkey = algorithm.publicKeyToByte(keyProvider.getPublicKey());
+        }
         var did = createDummyDid(pubkey);
         didScore.invoke(owner, "register", did, kid, pubkey);
         return new DidKeyHolder.Builder(keyProvider)
@@ -74,7 +84,9 @@ public class PolicyTest extends TestBase {
     private static String createPolicyId(String labelId, DidKeyHolder keyHolder) {
         // Keccak-256(label_id + consumer_pubkey)[0:16]
         var labelBytes = labelId.getBytes();
-        var consumerPubkey = (byte[]) didScore.call("getPublicKey", keyHolder.getDid(), keyHolder.getKeyId());
+        var pkeyBytes = algorithm.privateKeyToByte(keyHolder.getPrivateKey());
+        var consumerPubkey = IconKeys.getPublicKey(new Bytes(pkeyBytes), true).toByteArray();
+        assert consumerPubkey.length == 33;
         byte[] msgBytes = new byte[labelBytes.length + consumerPubkey.length];
         System.arraycopy(labelBytes, 0, msgBytes, 0, labelBytes.length);
         System.arraycopy(consumerPubkey, 0, msgBytes, labelBytes.length, consumerPubkey.length);
@@ -436,7 +448,7 @@ public class PolicyTest extends TestBase {
 
         // add more policies
         for (int i = 0; i < 30; i++) {
-            var consumer = createDidAndKeyHolder("key" + i);
+            var consumer = createDidAndKeyHolder("key" + i, true);
             var pid = createPolicyId(labelId, consumer);
             policyScore.invoke(owner, "add_policy",
                     new ParamsBuilder(alice, "add_policy").labelId(labelId)
