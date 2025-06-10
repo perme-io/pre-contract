@@ -28,6 +28,7 @@ dependencies {
 optimizedJar {
     dependsOn(project(':utils').jar)
     mainClassName = 'com.iconloop.score.pds.PdsPolicy'
+    archiveBaseName = 'pre-contract'
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
