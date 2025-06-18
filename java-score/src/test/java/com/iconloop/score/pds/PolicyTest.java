@@ -416,6 +416,7 @@ public class PolicyTest extends TestBase {
         var checkPolicy = (Map) policyScore.call("check_policy", policyId);
         System.out.println(checkPolicy);
         assertTrue((Boolean) checkPolicy.get("checked"));
+        assertEquals(bob.getKid(), checkPolicy.get("consumer"));
 
         // Negative: try to add with the same policyId
         assertThrows(UserRevertedException.class, () ->

@@ -417,6 +417,7 @@ public class PdsPolicy implements Label, Policy, Node {
 
         return Map.ofEntries(
                 Map.entry("owner", labelInfo.getOwner()),
+                Map.entry("consumer", policyInfo.getConsumer()),
                 Map.entry("policy_id", policy_id),
                 Map.entry("label_id", labelInfo.getLabel_id()),
                 Map.entry("checked", checked),
