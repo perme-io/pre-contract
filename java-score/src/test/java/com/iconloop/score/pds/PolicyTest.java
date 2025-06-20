@@ -493,6 +493,12 @@ public class PolicyTest extends TestBase {
         assertThrows(UserRevertedException.class, () ->
                 policyScore.invoke(owner, "add_node", peerId, "node0", "http://localhost:8080"));
 
+        // Negative: a non-owner attempts to add it
+        var someone = sm.createAccount();
+        var peerId2 = "peer_" + rand.nextInt(10000);
+        assertThrows(UserRevertedException.class, () ->
+                policyScore.invoke(someone, "add_node", peerId2, "node1", "http://localhost:8081"));
+
         // change the min stake value
         policyScore.invoke(owner, "set_min_stake_value", BigInteger.valueOf(100));
         assertEquals(BigInteger.valueOf(100), policyScore.call(BigInteger.class, "get_min_stake_value"));

@@ -459,6 +459,10 @@ public class PdsPolicy implements Label, Policy, Node {
         BigInteger minStake = get_min_stake_value();
         Context.require(stake.compareTo(ONE_ICX.multiply(minStake)) >= 0, "needs at least " + minStake + " ICX to add a node");
 
+        if (minStake.signum() == 0) {
+            // if there is no minimum stake, only the owner can call this function
+            onlyOwner();
+        }
         Address ownerAddress = (owner == null) ? Context.getCaller() : owner;
         NodeInfo nodeInfo = new NodeInfo(peer_id, name, endpoint, ownerAddress, Context.getBlockHeight(), stake, BigInteger.ZERO);
         this.nodeInfos.set(peer_id, nodeInfo);
